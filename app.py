@@ -187,7 +187,7 @@ def load_data(table_name):
     conn = get_connection()
     df = pd.read_sql(f"SELECT * FROM {table_name}", conn)
     conn.close()
-    return df  # 'id' column rakhi hai taaki delete/edit ke liye kaam aaye
+    return df
 
 
 # --- SIDEBAR NAVIGATION ---
@@ -770,14 +770,14 @@ elif menu == "🚚 6. Daily Dispatch Entry":
             use_container_width=True,
         )
 
-# --- 8. MASTER RECORDS & EXPORT (WITH ADMIN DELETE CONTROL) ---
+# --- 8. MASTER RECORDS & EXPORT (ADMIN EDIT & DELETE WITH CONFIRMATION) ---
 elif menu == "📂 7. Master Records & Export (Admin Controls)":
     st.header("📂 Complete Permanent Master Database & Admin Controls")
 
     if st.session_state.get("role") != "Admin":
         st.error(
             "🔒 Yeh section sirf **Admin** ke liye hai! Aapne 'Team' password"
-            " se login kiya hai, isliye yahan delete/edit controls hidden"
+            " se login kiya hai, isliye yahan edit/delete controls hidden"
             " hain."
         )
 
@@ -808,32 +808,134 @@ elif menu == "📂 7. Master Records & Export (Admin Controls)":
         )
         st.divider()
 
-        # Display data with Delete option if Admin
+        # Display Admin Controls if Admin
         if st.session_state.get("role") == "Admin":
-            st.subheader(f"Manage {report_title} Records (Admin Delete)")
+            st.subheader(f"Manage {report_title} Records (Admin Edit & Delete)")
             st.write(
-                "Agar koi entry galat hai, toh uski ID select karke Delete button"
-                " dabayein:"
+                "Kisi entry ko sudharne ke liye **Edit** ya hatane ke liye"
+                " **Delete** par click karein:"
             )
 
             for index, row in df.iterrows():
-                col1, col2 = st.columns([8, 2])
-                with col1:
-                    st.write(
-                        f"**ID: {row['id']}** | Date: {row.get('rm_date', row.get('milling_date', row.get('date', row.get('production_date', ''))))} | Miller: {row.get('miller_name', '')}"
-                    )
-                with col2:
-                    if st.button("🗑️ Delete", key=f"del_{table_name}_{row['id']}"):
-                        conn = get_connection()
-                        cursor = conn.cursor()
-                        cursor.execute(
-                            f"DELETE FROM {table_name} WHERE id = ?",
-                            (row["id"],),
+                row_id = row["id"]
+                date_val = row.get(
+                    "rm_date",
+                    row.get(
+                        "milling_date",
+                        row.get("date", row.get("production_date", "")),
+                    ),
+                )
+                miller_val = row.get("miller_name", "")
+
+                with st.expander(
+                    f"ID: {row_id} | Date: {date_val} | Miller: {miller_val}"
+                ):
+                    # --- EDIT FORM SECTION ---
+                    edit_mode_key = f"edit_mode_{table_name}_{row_id}"
+                    if edit_mode_key not in st.session_state:
+                        st.session_state[edit_mode_key] = False
+
+                    c_btn1, c_btn2 = st.columns(2)
+                    with c_btn1:
+                        if st.button(
+                            "✏️ Edit Record", key=f"btn_edit_{table_name}_{row_id}"
+                        ):
+                            st.session_state[edit_mode_key] = (
+                                not st.session_state[edit_mode_key]
+                            )
+                            st.rerun()
+
+                    with c_btn2:
+                        # --- DELETE WITH CONFIRMATION ---
+                        del_confirm_key = (
+                            f"del_confirm_{table_name}_{row_id}"
                         )
-                        conn.commit()
-                        conn.close()
-                        st.success(f"Deleted ID {row['id']} successfully!")
-                        st.rerun()
+                        if del_confirm_key not in st.session_state:
+                            st.session_state[del_confirm_key] = False
+
+                        if not st.session_state[del_confirm_key]:
+                            if st.button(
+                                "🗑️ Delete", key=f"btn_del_{table_name}_{row_id}"
+                            ):
+                                st.session_state[del_confirm_key] = True
+                                st.rerun()
+                        else:
+                            st.warning(
+                                "⚠️ Kya aap sach mein is entry ko delete"
+                                " karna chahte hain?"
+                            )
+                            yb1, yb2 = st.columns(2)
+                            with yb1:
+                                if st.button(
+                                    "Haan, Delete Karo",
+                                    key=f"confirm_del_{table_name}_{row_id}",
+                                ):
+                                    conn = get_connection()
+                                    cursor = conn.cursor()
+                                    cursor.execute(
+                                        f"DELETE FROM {table_name} WHERE id = ?",
+                                        (row_id,),
+                                    )
+                                    conn.commit()
+                                    conn.close()
+                                    st.session_state[del_confirm_key] = False
+                                    st.success(
+                                        f"Deleted ID {row_id} successfully!"
+                                    )
+                                    st.rerun()
+                            with yb2:
+                                if st.button(
+                                    "Nahi, Rehne Do",
+                                    key=f"cancel_del_{table_name}_{row_id}",
+                                ):
+                                    st.session_state[del_confirm_key] = False
+                                    st.rerun()
+
+                    # Agar Edit mode on hai toh fields show karein
+                    if st.session_state[edit_mode_key]:
+                        st.write(
+                            f"**Editing ID {row_id} (No Duplicates - Direct Update)**"
+                        )
+                        with st.form(key=f"update_form_{table_name}_{row_id}"):
+                            updated_data = {}
+                            # Columns ko iterate karke input fields generate karna
+                            for col_name in df.columns:
+                                if col_name == "id":
+                                    continue
+                                val = row[col_name]
+                                if isinstance(val, (int, float)):
+                                    updated_data[col_name] = st.number_input(
+                                        col_name, value=float(val)
+                                    )
+                                else:
+                                    updated_data[col_name] = st.text_input(
+                                        col_name, value=str(val)
+                                    )
+
+                            update_submit = st.form_submit_button(
+                                "💾 Save Changes (Update)"
+                            )
+                            if update_submit:
+                                conn = get_connection()
+                                cursor = conn.cursor()
+                                set_clause = ", ".join(
+                                    [f"{k} = ?" for k in updated_data.keys()]
+                                )
+                                values = list(updated_data.values()) + [
+                                    row_id
+                                ]
+                                cursor.execute(
+                                    f"UPDATE {table_name} SET {set_clause} WHERE id = ?",
+                                    values,
+                                )
+                                conn.commit()
+                                conn.close()
+                                st.session_state[edit_mode_key] = False
+                                st.success(
+                                    f"✅ ID {row_id} updated successfully!"
+                                )
+                                st.rerun()
+
             st.divider()
 
         st.subheader(f"Full {report_title} Table View")
