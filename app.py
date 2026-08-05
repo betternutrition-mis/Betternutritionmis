@@ -8,6 +8,36 @@ st.set_page_config(
     page_title="Advanced Flour Mill ERP", page_icon="🌾", layout="wide"
 )
 
+# --- SIMPLE PASSWORD PROTECTION SYSTEM ---
+def check_password():
+    """Returns `True` if the user had the correct password."""
+
+    def password_entered():
+        """Checks whether a password entered by the user is correct."""
+        if st.session_state["password"] == "Rishabh@1994":  # Yahan aap password badal sakte hain
+            st.session_state["password_correct"] = True
+            del st.session_state["password"]  # Security ke liye password session se hata dega
+        else:
+            st.session_state["password_correct"] = False
+
+    if "password_correct" not in st.session_state:
+        st.text_input(
+            "🔒 Password daliye app kholne ke liye:", type="password", on_change=password_entered, key="password"
+        )
+        return False
+    elif not st.session_state["password_correct"]:
+        st.text_input(
+            "🔒 Password daliye app kholne ke liye:", type="password", on_change=password_entered, key="password"
+        )
+        st.error("😕 Password galat hai. Dobara koshish karein.")
+        return False
+    else:
+        return True
+
+if not check_password():
+    st.stop()  # Jab tak password sahi nahi hoga, tab tak aage ka app load nahi hoga
+
+
 # App Title & Header
 st.title("🌾 Advanced Flour Mill Enterprise MIS (Permanent Database)")
 st.write(
@@ -79,7 +109,7 @@ def init_db():
             ccl4 TEXT,
             ash_aia REAL,
             alcoholic_acidity REAL,
-            gluten REAL,
+            gluten TEXT,
             chapati_sensory TEXT
         )
     """)
@@ -417,9 +447,7 @@ elif menu == "🧪 3. Quality Lab Parameters":
                 "Alcoholic Acidity", min_value=0.0, value=0.0, step=0.005
             )
         with c3:
-            gluten = st.number_input(
-                "Gluten %", min_value=0.0, value=0.0, step=0.1
-            )
+            gluten = st.text_input("Gluten", value="")
             chapati_sensory = st.selectbox(
                 "Chapati Sensory", ["Excellent", "Good", "Average", "Poor"]
             )
