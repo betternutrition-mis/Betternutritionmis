@@ -8,41 +8,53 @@ st.set_page_config(
     page_title="Advanced Flour Mill ERP", page_icon="🌾", layout="wide"
 )
 
-# --- SIMPLE PASSWORD PROTECTION SYSTEM ---
+# --- ROLE-BASED PASSWORD PROTECTION SYSTEM ---
 def check_password():
-    """Returns `True` if the user had the correct password."""
+    """Returns True if the user enters a valid password and sets their role."""
 
     def password_entered():
-        """Checks whether a password entered by the user is correct."""
-        if st.session_state["password"] == "Rishabh@1994":  # Yahan aap password badal sakte hain
+        entered_pwd = st.session_state["password"]
+        if entered_pwd == "Rishabh@1994":  # Aapka Admin Password
             st.session_state["password_correct"] = True
-            del st.session_state["password"]  # Security ke liye password session se hata dega
+            st.session_state["role"] = "Admin"
+            del st.session_state["password"]
+        elif entered_pwd == "team123":  # Team ke liye password
+            st.session_state["password_correct"] = True
+            st.session_state["role"] = "Team"
+            del st.session_state["password"]
         else:
             st.session_state["password_correct"] = False
 
     if "password_correct" not in st.session_state:
         st.text_input(
-            "🔒 Password daliye app kholne ke liye:", type="password", on_change=password_entered, key="password"
+            "🔒 Password daliye app kholne ke liye:",
+            type="password",
+            on_change=password_entered,
+            key="password",
         )
         return False
     elif not st.session_state["password_correct"]:
         st.text_input(
-            "🔒 Password daliye app kholne ke liye:", type="password", on_change=password_entered, key="password"
+            "🔒 Password daliye app kholne ke liye:",
+            type="password",
+            on_change=password_entered,
+            key="password",
         )
         st.error("😕 Password galat hai. Dobara koshish karein.")
         return False
     else:
         return True
 
-if not check_password():
-    st.stop()  # Jab tak password sahi nahi hoga, tab tak aage ka app load nahi hoga
 
+if not check_password():
+    st.stop()
 
 # App Title & Header
+user_role = st.session_state.get("role", "Team")
 st.title("🌾 Advanced Flour Mill Enterprise MIS (Permanent Database)")
 st.write(
-    "Modular ERP System with SQLite Permanent Storage: Data remains safe across"
-    " browser refreshes and restarts."
+    f"Logged in as: **{user_role}** | Modular ERP System with SQLite"
+    " Permanent Storage"
 )
 
 # Predefined Miller List with 'Other' Option
@@ -66,7 +78,6 @@ def init_db():
     conn = get_connection()
     cursor = conn.cursor()
 
-    # Raw Material Table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS raw_material (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -86,7 +97,6 @@ def init_db():
         )
     """)
 
-    # Milling Table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS milling (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -98,7 +108,6 @@ def init_db():
         )
     """)
 
-    # Quality Lab Table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS quality (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -114,7 +123,6 @@ def init_db():
         )
     """)
 
-    # Finished Goods Table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS finished_goods (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -138,7 +146,6 @@ def init_db():
         )
     """)
 
-    # Packing Material Table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS packing_material (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -153,7 +160,6 @@ def init_db():
         )
     """)
 
-    # Dispatch Table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS dispatch (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -174,18 +180,14 @@ def init_db():
     conn.close()
 
 
-# Initialize Database on Load
 init_db()
 
 
-# Helper function to fetch data as DataFrame
 def load_data(table_name):
     conn = get_connection()
     df = pd.read_sql(f"SELECT * FROM {table_name}", conn)
     conn.close()
-    if "id" in df.columns:
-        df = df.drop(columns=["id"])  # Hide internal primary key ID from views
-    return df
+    return df  # 'id' column rakhi hai taaki delete/edit ke liye kaam aaye
 
 
 # --- SIDEBAR NAVIGATION ---
@@ -199,12 +201,11 @@ menu = st.sidebar.selectbox(
         "📦 4. Finished Goods & Yield",
         "🏷️ 5. Better Nutrition Packing Material",
         "🚚 6. Daily Dispatch Entry",
-        "📂 7. Master Records & Export",
+        "📂 7. Master Records & Export (Admin Controls)",
     ],
 )
 
 
-# Helper function for Miller selection
 def get_miller_input(unique_key):
     st.write("### Select Miller Details")
     selected_option = st.selectbox(
@@ -286,12 +287,14 @@ if menu == "📊 Month-wise Summary Dashboard":
 
         st.divider()
         st.subheader("Raw Material Overview Table")
-        st.dataframe(f_rm, use_container_width=True)
+        display_df = (
+            f_rm.drop(columns=["id"]) if "id" in f_rm.columns else f_rm
+        )
+        st.dataframe(display_df, use_container_width=True)
 
 # --- 2. RAW MATERIAL RECEIVED ---
 elif menu == "📥 1. Raw Material Received":
     st.header("📥 Raw Material Received Entry")
-
     miller_name = get_miller_input("rm")
 
     with st.form("rm_form", clear_on_submit=True):
@@ -334,7 +337,6 @@ elif menu == "📥 1. Raw Material Received":
         if submit_rm:
             jute_wt = jute_bags * 0.650
             net_wt = gross_qty - jute_wt
-
             conn = get_connection()
             cursor = conn.cursor()
             cursor.execute(
@@ -360,21 +362,24 @@ elif menu == "📥 1. Raw Material Received":
             )
             conn.commit()
             conn.close()
-
             st.success(
                 f"✅ RM Saved & Permanently Stored for {miller_name}! Net Weight:"
                 f" {net_wt:,.2f} kg"
             )
 
-    st.subheader("Saved Raw Material Entries (Permanent)")
+    st.subheader("Saved Raw Material Entries")
     df_rm_saved = load_data("raw_material")
     if not df_rm_saved.empty:
-        st.dataframe(df_rm_saved, use_container_width=True)
+        st.dataframe(
+            df_rm_saved.drop(columns=["id"])
+            if "id" in df_rm_saved.columns
+            else df_rm_saved,
+            use_container_width=True,
+        )
 
 # --- 3. MILLING & PROCESSING ---
 elif menu == "⚙️ 2. Milling & Processing":
     st.header("⚙️ Milling & Processing Entry")
-
     miller_name = get_miller_input("milling")
 
     with st.form("milling_form", clear_on_submit=True):
@@ -395,7 +400,6 @@ elif menu == "⚙️ 2. Milling & Processing":
         submit_mil = st.form_submit_button(
             label="Save Milling Data & Reset Form"
         )
-
         if submit_mil:
             conn = get_connection()
             cursor = conn.cursor()
@@ -414,20 +418,23 @@ elif menu == "⚙️ 2. Milling & Processing":
             )
             conn.commit()
             conn.close()
-
             st.success(
                 f"✅ Milling Data Saved Permanently for {miller_name}!"
             )
 
-    st.subheader("Saved Milling Entries (Permanent)")
+    st.subheader("Saved Milling Entries")
     df_mil_saved = load_data("milling")
     if not df_mil_saved.empty:
-        st.dataframe(df_mil_saved, use_container_width=True)
+        st.dataframe(
+            df_mil_saved.drop(columns=["id"])
+            if "id" in df_mil_saved.columns
+            else df_mil_saved,
+            use_container_width=True,
+        )
 
 # --- 4. QUALITY LAB PARAMETERS ---
 elif menu == "🧪 3. Quality Lab Parameters":
     st.header("🧪 Quality Lab Parameters Entry")
-
     miller_name = get_miller_input("quality")
 
     with st.form("quality_form", clear_on_submit=True):
@@ -453,7 +460,6 @@ elif menu == "🧪 3. Quality Lab Parameters":
             )
 
         submit_q = st.form_submit_button(label="Save Quality Data & Reset Form")
-
         if submit_q:
             conn = get_connection()
             cursor = conn.cursor()
@@ -476,18 +482,21 @@ elif menu == "🧪 3. Quality Lab Parameters":
             )
             conn.commit()
             conn.close()
-
             st.success("✅ Quality Test Parameters Saved Permanently!")
 
-    st.subheader("Saved Quality Lab Records (Permanent)")
+    st.subheader("Saved Quality Lab Records")
     df_q_saved = load_data("quality")
     if not df_q_saved.empty:
-        st.dataframe(df_q_saved, use_container_width=True)
+        st.dataframe(
+            df_q_saved.drop(columns=["id"])
+            if "id" in df_q_saved.columns
+            else df_q_saved,
+            use_container_width=True,
+        )
 
 # --- 5. FINISHED GOODS & YIELD ---
 elif menu == "📦 4. Finished Goods & Yield":
     st.header("📦 Finished Goods, SKU Pouches & Yield Calculation")
-
     miller_name = get_miller_input("fg")
 
     with st.form("fg_form", clear_on_submit=True):
@@ -537,7 +546,6 @@ elif menu == "📦 4. Finished Goods & Yield":
         submit_fg = st.form_submit_button(
             label="Calculate Yield & Save Finished Goods"
         )
-
         if submit_fg:
             total_fin_qty = (
                 (pouch_500g * 0.5)
@@ -545,7 +553,6 @@ elif menu == "📦 4. Finished Goods & Yield":
                 + (pouch_2kg * 2.0)
                 + (pouch_5kg * 5.0)
             )
-
             mil_df = load_data("milling")
             matching_milling_qty = total_fin_qty / 0.93
             if not mil_df.empty:
@@ -556,10 +563,8 @@ elif menu == "📦 4. Finished Goods & Yield":
             base_calc_qty = (
                 matching_milling_qty if matching_milling_qty > 0 else 1.0
             )
-
             bran_pct = (bran_qty / base_calc_qty) * 100
             refraction_pct = (refraction_qty / base_calc_qty) * 100
-
             yield_pct = (
                 (total_fin_qty / base_calc_qty) * 100
                 if base_calc_qty > 0
@@ -598,21 +603,24 @@ elif menu == "📦 4. Finished Goods & Yield":
             )
             conn.commit()
             conn.close()
-
             st.success(
                 f"✅ FG Saved Permanently for {miller_name}! Total Finished:"
                 f" {total_fin_qty:,.2f} kg | Yield: {yield_pct:.2f}%"
             )
 
-    st.subheader("Saved Finished Goods Entries (Permanent)")
+    st.subheader("Saved Finished Goods Entries")
     df_fg_saved = load_data("finished_goods")
     if not df_fg_saved.empty:
-        st.dataframe(df_fg_saved, use_container_width=True)
+        st.dataframe(
+            df_fg_saved.drop(columns=["id"])
+            if "id" in df_fg_saved.columns
+            else df_fg_saved,
+            use_container_width=True,
+        )
 
 # --- 6. BETTER NUTRITION PACKING MATERIAL ---
 elif menu == "🏷️ 5. Better Nutrition Packing Material":
     st.header("🏷️ Better Nutrition - Packing Material Dispatch Entry")
-
     miller_name = get_miller_input("pm")
 
     with st.form("pm_form", clear_on_submit=True):
@@ -643,7 +651,6 @@ elif menu == "🏷️ 5. Better Nutrition Packing Material":
         submit_pm = st.form_submit_button(
             label="Save Packing Material Data & Reset"
         )
-
         if submit_pm:
             conn = get_connection()
             cursor = conn.cursor()
@@ -665,21 +672,24 @@ elif menu == "🏷️ 5. Better Nutrition Packing Material":
             )
             conn.commit()
             conn.close()
-
             st.success(
                 f"✅ Packing Material Record Saved Permanently for"
                 f" {miller_name}!"
             )
 
-    st.subheader("Saved Packing Material Sent History (Permanent)")
+    st.subheader("Saved Packing Material Sent History")
     df_pm_saved = load_data("packing_material")
     if not df_pm_saved.empty:
-        st.dataframe(df_pm_saved, use_container_width=True)
+        st.dataframe(
+            df_pm_saved.drop(columns=["id"])
+            if "id" in df_pm_saved.columns
+            else df_pm_saved,
+            use_container_width=True,
+        )
 
 # --- 7. DAILY DISPATCH ENTRY ---
 elif menu == "🚚 6. Daily Dispatch Entry":
     st.header("🚚 Daily Finished Goods Dispatch Entry")
-
     miller_name = get_miller_input("dispatch")
 
     with st.form("dispatch_form", clear_on_submit=True):
@@ -716,7 +726,6 @@ elif menu == "🚚 6. Daily Dispatch Entry":
         submit_disp = st.form_submit_button(
             label="Save Dispatch Data & Reset Form"
         )
-
         if submit_disp:
             tot_disp_wt = (
                 (disp_500g * 0.5)
@@ -724,7 +733,6 @@ elif menu == "🚚 6. Daily Dispatch Entry":
                 + (disp_2kg * 2.0)
                 + (disp_5kg * 5.0)
             )
-
             conn = get_connection()
             cursor = conn.cursor()
             cursor.execute(
@@ -747,20 +755,31 @@ elif menu == "🚚 6. Daily Dispatch Entry":
             )
             conn.commit()
             conn.close()
-
             st.success(
                 f"✅ Dispatch Saved Permanently for {miller_name}! Total"
                 f" Dispatched Wt: {tot_disp_wt:,.2f} kg"
             )
 
-    st.subheader("Saved Dispatch History (Permanent)")
+    st.subheader("Saved Dispatch History")
     df_disp_saved = load_data("dispatch")
     if not df_disp_saved.empty:
-        st.dataframe(df_disp_saved, use_container_width=True)
+        st.dataframe(
+            df_disp_saved.drop(columns=["id"])
+            if "id" in df_disp_saved.columns
+            else df_disp_saved,
+            use_container_width=True,
+        )
 
-# --- 8. MASTER RECORDS & EXPORT ---
-elif menu == "📂 7. Master Records & Export":
-    st.header("📂 Complete Permanent Master Database & Report Download")
+# --- 8. MASTER RECORDS & EXPORT (WITH ADMIN DELETE CONTROL) ---
+elif menu == "📂 7. Master Records & Export (Admin Controls)":
+    st.header("📂 Complete Permanent Master Database & Admin Controls")
+
+    if st.session_state.get("role") != "Admin":
+        st.error(
+            "🔒 Yeh section sirf **Admin** ke liye hai! Aapne 'Team' password"
+            " se login kiya hai, isliye yahan delete/edit controls hidden"
+            " hain."
+        )
 
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
         [
@@ -773,86 +792,74 @@ elif menu == "📂 7. Master Records & Export":
         ]
     )
 
+
+    def handle_admin_table_view(table_name, report_title, file_name):
+        df = load_data(table_name)
+        if df.empty:
+            st.info("No data found.")
+            return
+
+        # CSV Download Button
+        st.download_button(
+            f"📥 Download {report_title} CSV",
+            df.drop(columns=["id"]).to_csv(index=False).encode("utf-8"),
+            file_name,
+            "text/csv",
+        )
+        st.divider()
+
+        # Display data with Delete option if Admin
+        if st.session_state.get("role") == "Admin":
+            st.subheader(f"Manage {report_title} Records (Admin Delete)")
+            st.write(
+                "Agar koi entry galat hai, toh uski ID select karke Delete button"
+                " dabayein:"
+            )
+
+            for index, row in df.iterrows():
+                col1, col2 = st.columns([8, 2])
+                with col1:
+                    st.write(
+                        f"**ID: {row['id']}** | Date: {row.get('rm_date', row.get('milling_date', row.get('date', row.get('production_date', ''))))} | Miller: {row.get('miller_name', '')}"
+                    )
+                with col2:
+                    if st.button("🗑️ Delete", key=f"del_{table_name}_{row['id']}"):
+                        conn = get_connection()
+                        cursor = conn.cursor()
+                        cursor.execute(
+                            f"DELETE FROM {table_name} WHERE id = ?",
+                            (row["id"],),
+                        )
+                        conn.commit()
+                        conn.close()
+                        st.success(f"Deleted ID {row['id']} successfully!")
+                        st.rerun()
+            st.divider()
+
+        st.subheader(f"Full {report_title} Table View")
+        st.dataframe(
+            df.drop(columns=["id"]) if "id" in df.columns else df,
+            use_container_width=True,
+        )
+
+
     with tab1:
-        st.subheader("Raw Material Master")
-        df = load_data("raw_material")
-        if not df.empty:
-            st.dataframe(df, use_container_width=True)
-            st.download_button(
-                "📥 Download RM CSV",
-                df.to_csv(index=False).encode("utf-8"),
-                "rm_report.csv",
-                "text/csv",
-            )
-        else:
-            st.info("No data.")
-
+        handle_admin_table_view(
+            "raw_material", "Raw Material", "rm_report.csv"
+        )
     with tab2:
-        st.subheader("Milling Master")
-        df = load_data("milling")
-        if not df.empty:
-            st.dataframe(df, use_container_width=True)
-            st.download_button(
-                "📥 Download Milling CSV",
-                df.to_csv(index=False).encode("utf-8"),
-                "milling_report.csv",
-                "text/csv",
-            )
-        else:
-            st.info("No data.")
-
+        handle_admin_table_view("milling", "Milling", "milling_report.csv")
     with tab3:
-        st.subheader("Quality Lab Master")
-        df = load_data("quality")
-        if not df.empty:
-            st.dataframe(df, use_container_width=True)
-            st.download_button(
-                "📥 Download Quality CSV",
-                df.to_csv(index=False).encode("utf-8"),
-                "quality_report.csv",
-                "text/csv",
-            )
-        else:
-            st.info("No data.")
-
+        handle_admin_table_view("quality", "Quality Lab", "quality_report.csv")
     with tab4:
-        st.subheader("Finished Goods Master")
-        df = load_data("finished_goods")
-        if not df.empty:
-            st.dataframe(df, use_container_width=True)
-            st.download_button(
-                "📥 Download FG CSV",
-                df.to_csv(index=False).encode("utf-8"),
-                "fg_report.csv",
-                "text/csv",
-            )
-        else:
-            st.info("No data.")
-
+        handle_admin_table_view(
+            "finished_goods", "Finished Goods", "fg_report.csv"
+        )
     with tab5:
-        st.subheader("Packing Material Master")
-        df = load_data("packing_material")
-        if not df.empty:
-            st.dataframe(df, use_container_width=True)
-            st.download_button(
-                "📥 Download Packing Material CSV",
-                df.to_csv(index=False).encode("utf-8"),
-                "packing_material_report.csv",
-                "text/csv",
-            )
-        else:
-            st.info("No data.")
-
+        handle_admin_table_view(
+            "packing_material",
+            "Packing Material",
+            "packing_material_report.csv",
+        )
     with tab6:
-        st.subheader("Dispatch Master")
-        df = load_data("dispatch")
-        if not df.empty:
-            st.dataframe(df, use_container_width=True)
-            st.download_button(
-                "📥 Download Dispatch CSV",
-                df.to_csv(index=False).encode("utf-8"),
-                "dispatch_report.csv",
-                "text/csv",
-            )
-        else:
-            st.info("No data.")
+        handle_admin_table_view("dispatch", "Dispatch", "dispatch_report.csv")
