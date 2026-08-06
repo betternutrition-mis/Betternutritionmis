@@ -71,7 +71,6 @@ BASE_MILLER_LIST = [
     "Other",
 ]
 
-# Wapas purana database naam kar diya hai taaki purana data na khoye
 DB_FILE = "flour_mill_erp.db"
 
 
@@ -82,6 +81,8 @@ def get_connection():
 def init_db():
     conn = get_connection()
     cursor = conn.cursor()
+
+    # Tables creation with IF NOT EXISTS
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS raw_material (
             id INTEGER PRIMARY KEY AUTOINCREMENT, rm_date TEXT, miller_name TEXT, vendor_name TEXT, vehicle_number TEXT, hectoliter_weight REAL, moisture_rm REAL, broken_pct REAL, infestation TEXT, jute_bags INTEGER, gross_qty REAL, jute_weight REAL, net_weight REAL, remarks TEXT
@@ -99,7 +100,7 @@ def init_db():
     """)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS finished_goods (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, milling_id INTEGER, production_date TEXT, miller_name TEXT, mfd_date TEXT, expiry_date TEXT, mrp REAL, product_code TEXT, pouch_500g INTEGER, pouch_1kg INTEGER, pouch_2kg INTEGER, pouch_5kg INTEGER, total_finished_qty REAL, bran_qty REAL, bran_pct TEXT, refraction_qty REAL, refraction_pct TEXT, yield_pct TEXT, processing_loss_pct TEXT
+            id INTEGER PRIMARY KEY AUTOINCREMENT, milling_id INTEGER, production_date TEXT, miller_name TEXT, mfd_date TEXT, expiry_date TEXT, mrp REAL, product_code TEXT, pouch_500g INTEGER, pouch_1kg INTEGER, pouch_2kg INTEGER, pouch_5kg INTEGER, total_finished_qty REAL, bran_qty REAL, bran_pct TEXT, refraction_qty TEXT, refraction_pct TEXT, yield_pct TEXT, processing_loss_pct TEXT
         )
     """)
     cursor.execute("""
@@ -113,11 +114,14 @@ def init_db():
         )
     """)
 
-    # Safety Check: Agar purane table mein 'test_date' column nahi hai, toh ye automatically add kar dega bina data delete kiye
-    try:
-        cursor.execute("ALTER TABLE quality ADD COLUMN test_date TEXT")
-    except Exception:
-        pass  # Agar column pehle se hoga toh error nahi aayega, chupchap aage badh jayega
+    # Safe Column Addition with PRAGMA check to avoid any duplicate column crash
+    cursor.execute("PRAGMA table_info(quality);")
+    columns = [col[1] for col in cursor.fetchall()]
+    if "test_date" not in columns:
+        try:
+            cursor.execute("ALTER TABLE quality ADD COLUMN test_date TEXT")
+        except Exception:
+            pass
 
     conn.commit()
     conn.close()
@@ -879,7 +883,7 @@ elif menu == "6. Master Records & Export (Admin Controls)":
     else:
         st.success(
             "Welcome Admin! Aap yahan kisi bhi table ka record delete kar"
-            " sakte hain ya data export kar sakte hain."
+            " sakte hain ya data export kar सकते हैं."
         )
 
         tables = [
