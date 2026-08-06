@@ -146,7 +146,7 @@ def get_miller_input(unique_key, default_val=None):
     if default_val and default_val in BASE_MILLER_LIST:
         idx = BASE_MILLER_LIST.index(default_val)
     elif default_val and default_val not in BASE_MILLER_LIST:
-        idx = len(BASE_MILLER_LIST) - 1  # Other
+        idx = len(BASE_MILLER_LIST) - 1
 
     selected_option = st.selectbox(
         "Miller Name",
@@ -276,7 +276,6 @@ elif menu == "1. Raw Material Received":
 
     df_rm_saved = load_data("raw_material")
 
-    # Edit/Delete Mode selection if records exist
     if not df_rm_saved.empty:
         action_type = st.radio(
             "Action Mode", ["➕ New Entry", "✏️ Edit / 🗑️ Delete Existing Entry"], horizontal=True
@@ -304,19 +303,22 @@ elif menu == "1. Raw Material Received":
         st.session_state["edit_rm_id"] = int(selected_row["id"])
         edit_data = selected_row
 
-        col_del1, col_del2 = st.columns([1, 4])
-        with col_del1:
-            if st.button("🗑️ Delete Selected Record", type="primary"):
-                conn = get_connection()
-                cursor = conn.cursor()
-                cursor.execute(
-                    "DELETE FROM raw_material WHERE id = ?", (st.session_state["edit_rm_id"],)
-                )
-                conn.commit()
-                conn.close()
-                st.success(f"Record ID {st.session_state['edit_rm_id']} successfully deleted!")
-                st.session_state["edit_rm_id"] = None
-                st.rerun()
+        with st.expander("⚠️ Delete Confirmation Box", expanded=True):
+            confirm_del = st.checkbox("Haan, main is record ko permanently delete karna chahta hoon", key="conf_del_rm")
+            if st.button("🗑️ Confirm & Delete Record", type="primary"):
+                if confirm_del:
+                    conn = get_connection()
+                    cursor = conn.cursor()
+                    cursor.execute(
+                        "DELETE FROM raw_material WHERE id = ?", (st.session_state["edit_rm_id"],)
+                    )
+                    conn.commit()
+                    conn.close()
+                    st.success(f"Record ID {st.session_state['edit_rm_id']} successfully deleted!")
+                    st.session_state["edit_rm_id"] = None
+                    st.rerun()
+                else:
+                    st.error("Pehle confirmation checkbox par tick karein!")
     else:
         st.session_state["edit_rm_id"] = None
 
@@ -524,10 +526,10 @@ elif menu == "2. Milling & Quality Lab Entry":
             with qc2:
                 ccl4 = st.text_input("CCL4", value="")
                 ash_aia = st.number_input(
-                    "Ash + AIA", min_value=0.0, value=0.0, step=0.01
+                    "Ash + AIA", min_value=0.0, value=0.0, step=0.01, format="%.3f"
                 )
                 alcoholic_acidity = st.number_input(
-                    "Alcoholic Acidity", min_value=0.0, value=0.0, step=0.005
+                    "Alcoholic Acidity", min_value=0.0, value=0.0, step=0.001, format="%.4f"
                 )
             with qc3:
                 gluten = st.text_input("Gluten", value="")
@@ -640,10 +642,10 @@ elif menu == "2. Milling & Quality Lab Entry":
                     ogranulation = st.text_input("Granulation", value="")
                     occl4 = st.text_input("CCL4", value="")
                     oash = st.number_input(
-                        "Ash + AIA", min_value=0.0, value=0.0, step=0.01
+                        "Ash + AIA", min_value=0.0, value=0.0, step=0.01, format="%.3f"
                     )
                     oacidity = st.number_input(
-                        "Alcoholic Acidity", min_value=0.0, value=0.0, step=0.005
+                        "Alcoholic Acidity", min_value=0.0, value=0.0, step=0.001, format="%.4f"
                     )
                     ogluten = st.text_input("Gluten", value="")
                     osensory = st.selectbox(
@@ -688,18 +690,21 @@ elif menu == "2. Milling & Quality Lab Entry":
     if not df_mil_saved.empty:
         st.dataframe(df_mil_saved, use_container_width=True)
         
-        # Row deletion for Milling
         del_mil_id = st.selectbox("Select Milling ID to Delete", [None] + df_mil_saved["id"].tolist(), key="del_mil")
         if del_mil_id is not None:
-            if st.button("🗑️ Delete Selected Milling Record", key="btn_del_mil"):
-                conn = get_connection()
-                cursor = conn.cursor()
-                cursor.execute("DELETE FROM milling WHERE id = ?", (del_mil_id,))
-                cursor.execute("DELETE FROM quality WHERE milling_id = ?", (del_mil_id,))
-                conn.commit()
-                conn.close()
-                st.success(f"Milling ID {del_mil_id} deleted successfully!")
-                st.rerun()
+            confirm_del_mil = st.checkbox("Haan, main is milling record ko delete karna chahta hoon", key="conf_mil")
+            if st.button("🗑️ Confirm & Delete Milling Record", key="btn_del_mil"):
+                if confirm_del_mil:
+                    conn = get_connection()
+                    cursor = conn.cursor()
+                    cursor.execute("DELETE FROM milling WHERE id = ?", (del_mil_id,))
+                    cursor.execute("DELETE FROM quality WHERE milling_id = ?", (del_mil_id,))
+                    conn.commit()
+                    conn.close()
+                    st.success(f"Milling ID {del_mil_id} deleted successfully!")
+                    st.rerun()
+                else:
+                    st.error("Pehle confirmation checkbox par tick karein!")
 
     st.subheader("Saved Quality Lab Records")
     df_q_saved = load_data("quality")
@@ -708,21 +713,25 @@ elif menu == "2. Milling & Quality Lab Entry":
         
         del_q_id = st.selectbox("Select Quality Record ID to Delete", [None] + df_q_saved["id"].tolist(), key="del_q")
         if del_q_id is not None:
-            if st.button("🗑️ Delete Selected Quality Record", key="btn_del_q"):
-                conn = get_connection()
-                cursor = conn.cursor()
-                cursor.execute("DELETE FROM quality WHERE id = ?", (del_q_id,))
-                conn.commit()
-                conn.close()
-                st.success(f"Quality Record ID {del_q_id} deleted successfully!")
-                st.rerun()
+            confirm_del_q = st.checkbox("Haan, main is quality record ko delete karna chahta hoon", key="conf_q")
+            if st.button("🗑️ Confirm & Delete Quality Record", key="btn_del_q"):
+                if confirm_del_q:
+                    conn = get_connection()
+                    cursor = conn.cursor()
+                    cursor.execute("DELETE FROM quality WHERE id = ?", (del_q_id,))
+                    conn.commit()
+                    conn.close()
+                    st.success(f"Quality Record ID {del_q_id} deleted successfully!")
+                    st.rerun()
+                else:
+                    st.error("Pehle confirmation checkbox par tick karein!")
 
 elif menu == "3. Finished Goods & Yield":
     st.header("Finished Goods Production & Yield Tracking")
     df_mil = load_data("milling")
     if df_mil.empty:
         st.warning(
-            "Pehle Menu 2 से Milling entry karein, tabhi Finished Goods entry"
+            "Pehle Menu 2 se Milling entry karein, tabhi Finished Goods entry"
             " ho sakegi."
         )
     else:
@@ -864,14 +873,18 @@ elif menu == "3. Finished Goods & Yield":
         
         del_fg_id = st.selectbox("Select Finished Goods ID to Delete", [None] + df_fg_saved["id"].tolist(), key="del_fg")
         if del_fg_id is not None:
-            if st.button("🗑️ Delete Selected Finished Goods Record", key="btn_del_fg"):
-                conn = get_connection()
-                cursor = conn.cursor()
-                cursor.execute("DELETE FROM finished_goods WHERE id = ?", (del_fg_id,))
-                conn.commit()
-                conn.close()
-                st.success(f"Finished Goods ID {del_fg_id} deleted successfully!")
-                st.rerun()
+            confirm_del_fg = st.checkbox("Haan, main is finished goods record ko delete karna chahta hoon", key="conf_fg")
+            if st.button("🗑️ Confirm & Delete Finished Goods Record", key="btn_del_fg"):
+                if confirm_del_fg:
+                    conn = get_connection()
+                    cursor = conn.cursor()
+                    cursor.execute("DELETE FROM finished_goods WHERE id = ?", (del_fg_id,))
+                    conn.commit()
+                    conn.close()
+                    st.success(f"Finished Goods ID {del_fg_id} deleted successfully!")
+                    st.rerun()
+                else:
+                    st.error("Pehle confirmation checkbox par tick karein!")
 
 elif menu == "4. Better Nutrition Packing Material":
     st.header("Better Nutrition Packing Material Dispatch/Stock Entry")
@@ -937,14 +950,18 @@ elif menu == "4. Better Nutrition Packing Material":
         
         del_pm_id = st.selectbox("Select Packing Material ID to Delete", [None] + df_pm_saved["id"].tolist(), key="del_pm")
         if del_pm_id is not None:
-            if st.button("🗑️ Delete Selected Packing Material Record", key="btn_del_pm"):
-                conn = get_connection()
-                cursor = conn.cursor()
-                cursor.execute("DELETE FROM packing_material WHERE id = ?", (del_pm_id,))
-                conn.commit()
-                conn.close()
-                st.success(f"Packing Material Record ID {del_pm_id} deleted successfully!")
-                st.rerun()
+            confirm_del_pm = st.checkbox("Haan, main is packing material record ko delete karna chahta hoon", key="conf_pm")
+            if st.button("🗑️ Confirm & Delete Packing Material Record", key="btn_del_pm"):
+                if confirm_del_pm:
+                    conn = get_connection()
+                    cursor = conn.cursor()
+                    cursor.execute("DELETE FROM packing_material WHERE id = ?", (del_pm_id,))
+                    conn.commit()
+                    conn.close()
+                    st.success(f"Packing Material Record ID {del_pm_id} deleted successfully!")
+                    st.rerun()
+                else:
+                    st.error("Pehle confirmation checkbox par tick karein!")
 
 elif menu == "5. Daily Dispatch Entry":
     st.header("Daily Finished Goods Dispatch Entry")
@@ -1019,14 +1036,18 @@ elif menu == "5. Daily Dispatch Entry":
         
         del_disp_id = st.selectbox("Select Dispatch ID to Delete", [None] + df_disp_saved["id"].tolist(), key="del_disp")
         if del_disp_id is not None:
-            if st.button("🗑️ Delete Selected Dispatch Record", key="btn_del_disp"):
-                conn = get_connection()
-                cursor = conn.cursor()
-                cursor.execute("DELETE FROM dispatch WHERE id = ?", (del_disp_id,))
-                conn.commit()
-                conn.close()
-                st.success(f"Dispatch ID {del_disp_id} deleted successfully!")
-                st.rerun()
+            confirm_del_disp = st.checkbox("Haan, main is dispatch record ko delete karna chahta hoon", key="conf_disp")
+            if st.button("🗑️ Confirm & Delete Dispatch Record", key="btn_del_disp"):
+                if confirm_del_disp:
+                    conn = get_connection()
+                    cursor = conn.cursor()
+                    cursor.execute("DELETE FROM dispatch WHERE id = ?", (del_disp_id,))
+                    conn.commit()
+                    conn.close()
+                    st.success(f"Dispatch ID {del_disp_id} deleted successfully!")
+                    st.rerun()
+                else:
+                    st.error("Pehle confirmation checkbox par tick karein!")
 
 elif menu == "6. Master Records & Export (Admin Controls)":
     st.header("Master Records, Data Management & Admin Controls")
