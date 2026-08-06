@@ -71,9 +71,12 @@ BASE_MILLER_LIST = [
     "Other",
 ]
 
+# Database name change kar diya hai taaki naya fresh table bane
+DB_FILE = "flour_mill_erp_v2.db"
+
 
 def get_connection():
-    return sqlite3.connect("flour_mill_erp.db", check_same_thread=False)
+    return sqlite3.connect(DB_FILE, check_same_thread=False)
 
 
 def init_db():
@@ -874,7 +877,7 @@ elif menu == "6. Master Records & Export (Admin Controls)":
 
         if st.button("⚠️ Reset/Recreate Database Tables (Fix Schema Errors)"):
             try:
-                os.remove("flour_mill_erp.db")
+                os.remove(DB_FILE)
                 init_db()
                 st.success(
                     "Database successfully reset and recreated without errors!"
