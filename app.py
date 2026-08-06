@@ -260,13 +260,21 @@ elif menu == "1. Raw Material Received":
             )
         with c2:
             hecto_wt = st.number_input(
-                "Hectoliter Weight", min_value=0.0, value=0.0, step=0.1
+                "Hectoliter Weight",
+                min_value=0.0,
+                value=0.0,
+                step=0.1,
+                format="%.1f",
             )
             moisture_rm = st.number_input(
-                "Moisture % (RM)", min_value=0.0, value=0.0, step=0.1
+                "Moisture % (RM)",
+                min_value=0.0,
+                value=0.0,
+                step=0.1,
+                format="%.1f",
             )
             broken_pct = st.number_input(
-                "Broken %", min_value=0.0, value=0.0, step=0.1
+                "Broken %", min_value=0.0, value=0.0, step=0.1, format="%.1f"
             )
         with c3:
             infestation = st.selectbox(
@@ -279,7 +287,11 @@ elif menu == "1. Raw Material Received":
                 step=1,
             )
             gross_qty = st.number_input(
-                "Gross Qty (kg)", min_value=0.0, value=0.0, step=10.0
+                "Gross Qty (kg)",
+                min_value=0.0,
+                value=0.0,
+                step=10.0,
+                format="%.2f",
             )
         remarks = st.text_input("Remarks", value="")
         submit_rm = st.form_submit_button(
@@ -338,12 +350,20 @@ elif menu == "2. Milling & Processing":
                 st.date_input("Milling Date", datetime.date.today())
             )
             milling_qty = st.number_input(
-                "Milling Quantity (kg)", min_value=0.0, value=0.0, step=10.0
+                "Milling Quantity (kg)",
+                min_value=0.0,
+                value=0.0,
+                step=10.0,
+                format="%.2f",
             )
         with c2:
             tempering_time = st.text_input("Tempering Time", value="")
             tempering_water = st.number_input(
-                "Tempering Water (Ltr)", min_value=0.0, value=0.0, step=10.0
+                "Tempering Water (Ltr)",
+                min_value=0.0,
+                value=0.0,
+                step=10.0,
+                format="%.2f",
             )
         submit_mil = st.form_submit_button(
             label="Save Milling Data & Reset Form"
@@ -440,15 +460,24 @@ elif menu == "3. Quality Lab Parameters":
                         min_value=0.0,
                         value=0.0,
                         step=0.1,
+                        format="%.1f",
                     )
                     granulation = st.text_input("Granulation", value="")
                 with c2:
                     ccl4 = st.text_input("CCL4", value="")
                     ash_aia = st.number_input(
-                        "Ash + AIA", min_value=0.0, value=0.0, step=0.01
+                        "Ash + AIA",
+                        min_value=0.0,
+                        value=0.0,
+                        step=0.001,
+                        format="%.3f",
                     )
                     alcoholic_acidity = st.number_input(
-                        "Alcoholic Acidity", min_value=0.0, value=0.0, step=0.005
+                        "Alcoholic Acidity",
+                        min_value=0.0,
+                        value=0.0,
+                        step=0.001,
+                        format="%.3f",
                     )
                 with c3:
                     gluten = st.text_input("Gluten", value="")
@@ -572,7 +601,11 @@ elif menu == "4. Finished Goods & Yield":
                         )
                     )
                     mrp = st.number_input(
-                        "MRP (per unit)", min_value=0.0, value=0.0, step=5.0
+                        "MRP (per unit)",
+                        min_value=0.0,
+                        value=0.0,
+                        step=5.0,
+                        format="%.2f",
                     )
                 with c3:
                     product_code = st.text_input("Product Code", value="")
@@ -594,11 +627,19 @@ elif menu == "4. Finished Goods & Yield":
                 lc1, lc2 = st.columns(2)
                 with lc1:
                     bran_qty = st.number_input(
-                        "Bran Qty (kg)", min_value=0.0, value=0.0, step=1.0
+                        "Bran Qty (kg)",
+                        min_value=0.0,
+                        value=0.0,
+                        step=1.0,
+                        format="%.2f",
                     )
                 with lc2:
                     refraction_qty = st.number_input(
-                        "Refraction Qty (kg)", min_value=0.0, value=0.0, step=1.0
+                        "Refraction Qty (kg)",
+                        min_value=0.0,
+                        value=0.0,
+                        step=1.0,
+                        format="%.2f",
                     )
 
                 submit_fg = st.form_submit_button(
@@ -874,7 +915,6 @@ elif menu == "7. Master Records & Export (Admin Controls)":
             ):
                 try:
                     conn = get_connection()
-                    # Overwrite table with updated dataframe safely
                     edited_df.to_sql(
                         table_name, conn, if_exists="replace", index=False
                     )
