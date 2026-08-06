@@ -421,27 +421,19 @@ elif menu == "3. Quality Lab Parameters":
 
             selected_milling_id = int(selected_row["id"])
             miller_name = selected_row["miller_name"]
-            milling_date_str = str(selected_row["milling_date"])
-
-            # Convert milling date string to datetime.date object for default date input
-            parsed_milling_date = datetime.datetime.strptime(
-                milling_date_str, "%Y-%m-%d"
-            ).date()
+            milling_date = selected_row["milling_date"]
 
             st.info(
-                f"Aap **{miller_name}** ke **{milling_date_str}** wale milling"
+                f"Aap **{miller_name}** ke **{milling_date}** wale milling"
                 f" batch (ID: {selected_milling_id}) ke liye Quality details"
-                " bhar rahe hain. Date lock ki gayi hai."
+                " bhar rahe hain."
             )
 
             with st.form("quality_form", clear_on_submit=True):
                 c1, c2, c3 = st.columns(3)
                 with c1:
-                    # Date is locked/disabled to match milling date exactly
-                    q_date = st.date_input(
-                        "Lab Test Date (Locked to Milling Date)",
-                        value=parsed_milling_date,
-                        disabled=True,
+                    q_date = str(
+                        st.date_input("Lab Test Date", datetime.date.today())
                     )
                     moisture_milled = st.number_input(
                         "Moisture % (Milled)",
@@ -477,7 +469,7 @@ elif menu == "3. Quality Lab Parameters":
                     """,
                         (
                             selected_milling_id,
-                            str(parsed_milling_date),
+                            q_date,
                             miller_name,
                             moisture_milled,
                             granulation,
@@ -553,37 +545,30 @@ elif menu == "4. Finished Goods & Yield":
 
             selected_milling_id = int(selected_row["id"])
             miller_name = selected_row["miller_name"]
-            milling_date_str = str(selected_row["milling_date"])
+            milling_date = selected_row["milling_date"]
             matching_milling_qty = float(selected_row["milling_qty"])
 
-            parsed_milling_date = datetime.datetime.strptime(
-                milling_date_str, "%Y-%m-%d"
-            ).date()
-
             st.info(
-                f"Aap **{miller_name}** ke **{milling_date_str}** wale milling"
+                f"Aap **{miller_name}** ke **{milling_date}** wale milling"
                 f" batch (ID: {selected_milling_id}, Qty:"
                 f" {matching_milling_qty} kg) ke liye Finished Goods bhar"
-                " rahe hain. Production Date lock ki gayi hai."
+                " rahe hain."
             )
 
             with st.form("fg_form", clear_on_submit=True):
                 c1, c2, c3, c4 = st.columns(4)
                 with c1:
-                    # Production Date is locked to milling date
-                    prod_date = st.date_input(
-                        "Production Date (Locked)",
-                        value=parsed_milling_date,
-                        disabled=True,
+                    prod_date = str(
+                        st.date_input("Production Date", datetime.date.today())
                     )
                     mfd_date = str(
-                        st.date_input("MFD Date", parsed_milling_date)
+                        st.date_input("MFD Date", datetime.date.today())
                     )
                 with c2:
                     expiry_date = str(
                         st.date_input(
                             "Expiry Date",
-                            parsed_milling_date + datetime.timedelta(days=90),
+                            datetime.date.today() + datetime.timedelta(days=90),
                         )
                     )
                     mrp = st.number_input(
@@ -652,7 +637,7 @@ elif menu == "4. Finished Goods & Yield":
                     """,
                         (
                             selected_milling_id,
-                            str(parsed_milling_date),
+                            prod_date,
                             miller_name,
                             mfd_date,
                             expiry_date,
