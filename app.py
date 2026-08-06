@@ -262,7 +262,7 @@ if menu == "📊 Month-wise Summary Dashboard":
 
         tot_net_rm = f_rm["net_weight"].sum()
 
-        # Milling Filter
+        # Milling Data & Filter
         f_mil = load_data("milling")
         if not f_mil.empty:
             if selected_miller != "All":
@@ -271,7 +271,7 @@ if menu == "📊 Month-wise Summary Dashboard":
             f_mil["milling_qty"].sum() if not f_mil.empty else 0.0
         )
 
-        # Finished Goods Filter
+        # Finished Goods Data & Filter
         f_fg = load_data("finished_goods")
         if not f_fg.empty:
             if selected_miller != "All":
@@ -280,7 +280,7 @@ if menu == "📊 Month-wise Summary Dashboard":
             f_fg["total_finished_qty"].sum() if not f_fg.empty else 0.0
         )
 
-        # Dispatch Filter
+        # Dispatch Data & Filter
         f_disp = load_data("dispatch")
         if not f_disp.empty:
             if selected_miller != "All":
@@ -291,14 +291,17 @@ if menu == "📊 Month-wise Summary Dashboard":
             else 0.0
         )
 
-        closing_stock = tot_finished - tot_dispatched
+        # --- SEPARATE CLOSING CALCULATIONS ---
+        rm_closing_stock = tot_net_rm - tot_milled
+        fg_closing_stock = tot_finished - tot_dispatched
 
-        c1, c2, c3, c4, c5 = st.columns(5)
+        c1, c2, c3, c4, c5, c6 = st.columns(6)
         c1.metric("Total Net RM (kg)", f"{tot_net_rm:,.2f}")
         c2.metric("Total Milled (kg)", f"{tot_milled:,.2f}")
-        c3.metric("Total Finished (kg)", f"{tot_finished:,.2f}")
-        c4.metric("Total Dispatched (kg)", f"{tot_dispatched:,.2f}")
-        c5.metric("Miller Closing Stock (kg)", f"{closing_stock:,.2f}")
+        c3.metric("RM Closing (kg)", f"{rm_closing_stock:,.2f}")
+        c4.metric("Total Finished (kg)", f"{tot_finished:,.2f}")
+        c5.metric("Total Dispatched (kg)", f"{tot_dispatched:,.2f}")
+        c6.metric("FG Closing (kg)", f"{fg_closing_stock:,.2f}")
 
         st.divider()
         st.subheader("Raw Material Overview Table")
@@ -604,8 +607,3 @@ elif menu == "📦 4. Finished Goods & Yield":
                     mrp,
                     product_code,
                     pouch_500g,
-                    pouch_1kg,
-                    pouch_2kg,
-                    pouch_5kg,
-                    round(total_fin_qty, 2),
-                    bran_qty,
