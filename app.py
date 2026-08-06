@@ -517,4 +517,4 @@ elif menu == "2. Milling & Quality Lab Entry":
 
             st.divider()
             st.subheader("2. Quality Lab Parameters")
-            qc1, qc2, qc3 = st.columns(3
+            qc1, qc2, qc3 = st.columns(3)
