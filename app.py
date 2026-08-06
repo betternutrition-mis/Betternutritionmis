@@ -67,7 +67,7 @@ def init_db():
     """)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS milling (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, milling_date TEXT, miller_name TEXT, milling_qty REAL, tempering_time TEXT, tempering_water REAL, entered_by TEXT
+            id INTEGER PRIMARY KEY AUTOINCREMENT, milling_date TEXT, miller_name TEXT, milling_qty REAL, tempering_time TEXT, tempering_water REAL, finished_qty REAL, entered_by TEXT
         )
     """)
     cursor.execute("""
@@ -87,13 +87,17 @@ def init_db():
         cursor.execute("ALTER TABLE milling ADD COLUMN entered_by TEXT")
     except Exception:
         pass
+    try:
+        cursor.execute("ALTER TABLE milling ADD COLUMN finished_qty REAL")
+    except Exception:
+        pass
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS employees (
             id INTEGER PRIMARY KEY AUTOINCREMENT, employee_name TEXT, pin TEXT, role TEXT
         )
     """)
-    # Default employees add karein agar table khali hai
+    # Default employees & Admin add karein
     cursor.execute("SELECT COUNT(*) FROM employees")
     if cursor.fetchone()[0] == 0:
         cursor.execute(
@@ -106,7 +110,7 @@ def init_db():
         )
         cursor.execute(
             "INSERT INTO employees (employee_name, pin, role) VALUES (?, ?, ?)",
-            ("Rishabh Admin", "1994", "Admin"),
+            ("Admin", "adMin@123", "Admin"),
         )
         conn.commit()
 
@@ -116,14 +120,14 @@ def init_db():
 init_db()
 
 
-# Email Alert Function
+# Email Alert Function (Jo Team ya Admin sabhi entries par email bhejega)
 def send_email_alert(subject, body):
     try:
-        sender_email = "your_email@gmail.com"  # Apna Gmail yahan daalein
-        sender_password = (
-            "your_app_password"  # Gmail App Password yahan daalein
+        sender_email = "kamtanath111@gmail.com"
+        sender_password = "kmbdgdznfcrdrrdh"  # Generated App Password
+        receiver_email = (
+            "kamtanath111@gmail.com"  # Aapka email jahan saari reports aayengi
         )
-        receiver_email = "rishabh_target_email@gmail.com"  # Jis email par alert chahiye
 
         msg = EmailMessage()
         msg.set_content(body)
@@ -139,7 +143,7 @@ def send_email_alert(subject, body):
         print(f"Email error: {e}")
 
 
-# Authentication System using Employee ID + PIN
+# Authentication System supporting Employee ID + PIN and Admin Username + Password
 def check_auth():
     if "logged_in" not in st.session_state:
         st.session_state["logged_in"] = False
@@ -150,8 +154,8 @@ def check_auth():
         st.markdown(
             """
             <div class="hero-banner" style="text-align: center;">
-                <h1>Employee Login</h1>
-                <p>Kripya apni Employee ID aur 4-digit PIN darj karein.</p>
+                <h1>ERP Login Portal</h1>
+                <p>Team Member apni ID aur 4-digit PIN daalein | Admin username 'Admin' aur password daalein.</p>
             </div>
         """,
             unsafe_allow_html=True,
@@ -160,30 +164,44 @@ def check_auth():
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
             with st.form("login_form"):
-                emp_name_input = st.text_input("Employee Name / ID")
-                emp_pin = st.text_input("4-digit PIN", type="password")
+                emp_name_input = st.text_input("Username / Employee Name / ID")
+                emp_pin = st.text_input("PIN / Password", type="password")
                 submit_login = st.form_submit_button("Login Karein")
 
                 if submit_login:
-                    conn = get_connection()
-                    cursor = conn.cursor()
-                    cursor.execute(
-                        "SELECT employee_name, role FROM employees WHERE employee_name = ? AND pin = ?",
-                        (emp_name_input.strip(), emp_pin.strip()),
-                    )
-                    user = cursor.fetchone()
-                    conn.close()
-
-                    if user:
+                    # Special Hardcoded Admin Check
+                    if (
+                        emp_name_input.strip() == "Admin"
+                        and emp_pin.strip() == "adMin@123"
+                    ):
                         st.session_state["logged_in"] = True
-                        st.session_state["user_name"] = user[0]
-                        st.session_state["role"] = user[1]
-                        st.success(
-                            f"Swagat hai, {user[0]}! App khul rahi hai..."
-                        )
+                        st.session_state["user_name"] = "Rishabh Admin"
+                        st.session_state["role"] = "Admin"
+                        st.success("Swagat hai, Admin! Dashboard khul raha hai...")
                         st.rerun()
                     else:
-                        st.error("Galat Name ya PIN! Dobara koshish karein.")
+                        conn = get_connection()
+                        cursor = conn.cursor()
+                        cursor.execute(
+                            "SELECT employee_name, role FROM employees WHERE employee_name = ? AND pin = ?",
+                            (emp_name_input.strip(), emp_pin.strip()),
+                        )
+                        user = cursor.fetchone()
+                        conn.close()
+
+                        if user:
+                            st.session_state["logged_in"] = True
+                            st.session_state["user_name"] = user[0]
+                            st.session_state["role"] = user[1]
+                            st.success(
+                                f"Swagat hai, {user[0]}! App khul rahi hai..."
+                            )
+                            st.rerun()
+                        else:
+                            st.error(
+                                "Galat Username/ID ya Password! Dobara koshish"
+                                " karein."
+                            )
         return False
     return True
 
@@ -664,16 +682,38 @@ elif menu == "1. Raw Material Received":
                     conn.commit()
                     conn.close()
 
-                    # Send Email Alert
-                    email_subject = (
-                        f"New RM Entry by {current_logged_user} - {miller_name}"
-                    )
-                    email_body = f"Nayi Raw Material entry darj ki gayi hai:\n\nUser: {current_logged_user}\nMiller: {miller_name}\nNet Weight: {net_wt:,.2f} kg\nDate: {rm_date}"
+                    # Detailed Email Report for Raw Material
+                    email_subject = f"[REPORT] New Raw Material Entry - {miller_name}"
+                    email_body = f"""
+BETTER NUTRITION - RAW MATERIAL ENTRY REPORT
+============================================
+Neeche nayi Raw Material entry ki poori report di gayi hai:
+
+• Entry Date: {rm_date}
+• Entered By (User): {current_logged_user}
+• Miller Name: {miller_name}
+• Vendor Name: {vendor_name}
+• Vehicle Number: {vehicle_no}
+
+QUALITY & WEIGHT PARAMETERS:
+• Hectoliter Weight: {hecto_wt}
+• Moisture % (RM): {moisture_rm}%
+• Broken %: {broken_pct}%
+• Infestation Level: {infestation}
+• Total Jute Bags: {jute_bags} (650g/bag fix)
+• Gross Quantity: {gross_qty:,.2f} kg
+• Jute Bag Weight: {round(jute_wt, 2):,.2f} kg
+• Net Weight: {round(net_wt, 2):,.2f} kg
+• Remarks: {remarks}
+
+============================================
+Yeh email Better Nutrition ERP System se automatically bheji gayi hai.
+"""
                     send_email_alert(email_subject, email_body)
 
                     st.success(
                         f"RM Saved & Stored by {current_logged_user}! Net Weight:"
-                        f" {net_wt:,.2f} kg"
+                        f" {net_wt:,.2f} kg. Email report sent to Admin."
                     )
 
     st.subheader("Saved Raw Material Entries")
@@ -685,8 +725,8 @@ elif menu == "2. Milling & Quality Lab Entry":
     st.markdown(
         """
         <div class="hero-banner">
-            <h1>Milling Processing & Quality Lab Entry</h1>
-            <p>Record milling quantities, tempering parameters, and lab test results.</p>
+            <h1>Milling Processing, Finished Goods & Quality Lab Entry</h1>
+            <p>Record milling quantities, finished goods production, tempering parameters, and lab test results.</p>
         </div>
     """,
         unsafe_allow_html=True,
@@ -795,7 +835,7 @@ elif menu == "2. Milling & Quality Lab Entry":
                     edit_q_data = q_match.iloc[0]
 
         with st.form("milling_quality_form", clear_on_submit=False):
-            st.subheader("1. Milling Parameters")
+            st.subheader("1. Milling Parameters & Finished Goods Quantity")
             c1, c2 = st.columns(2)
             with c1:
                 default_mdate = datetime.date.today()
@@ -815,9 +855,25 @@ elif menu == "2. Milling & Quality Lab Entry":
                     else None
                 )
                 milling_qty = st.number_input(
-                    "Milling Quantity (kg)",
+                    "Milling Quantity (Input RM kg)",
                     value=default_mqty,
                     placeholder="Type qty...",
+                    step=10.0,
+                )
+
+                default_fqty = (
+                    float(edit_mil_data["finished_qty"])
+                    if (
+                        edit_mil_data is not None
+                        and "finished_qty" in edit_mil_data
+                        and pd.notna(edit_mil_data["finished_qty"])
+                    )
+                    else None
+                )
+                finished_qty = st.number_input(
+                    "Finished Goods Quantity Produced (kg)",
+                    value=default_fqty,
+                    placeholder="Type finished goods qty...",
                     step=10.0,
                 )
             with c2:
@@ -949,6 +1005,9 @@ elif menu == "2. Milling & Quality Lab Entry":
                 final_mil_qty = (
                     milling_qty if milling_qty is not None else 0.0
                 )
+                final_fin_qty = (
+                    finished_qty if finished_qty is not None else 0.0
+                )
                 final_temp_water = (
                     tempering_water if tempering_water is not None else 0.0
                 )
@@ -968,7 +1027,7 @@ elif menu == "2. Milling & Quality Lab Entry":
                     cursor.execute(
                         """
                         UPDATE milling 
-                        SET milling_date=?, miller_name=?, milling_qty=?, tempering_time=?, tempering_water=?
+                        SET milling_date=?, miller_name=?, milling_qty=?, tempering_time=?, tempering_water=?, finished_qty=?
                         WHERE id=?
                     """,
                         (
@@ -977,6 +1036,7 @@ elif menu == "2. Milling & Quality Lab Entry":
                             final_mil_qty,
                             tempering_time,
                             final_temp_water,
+                            final_fin_qty,
                             st.session_state["edit_mil_id"],
                         ),
                     )
@@ -1032,8 +1092,8 @@ elif menu == "2. Milling & Quality Lab Entry":
                 else:
                     cursor.execute(
                         """
-                        INSERT INTO milling (milling_date, miller_name, milling_qty, tempering_time, tempering_water, entered_by)
-                        VALUES (?, ?, ?, ?, ?, ?)
+                        INSERT INTO milling (milling_date, miller_name, milling_qty, tempering_time, tempering_water, finished_qty, entered_by)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
                         (
                             milling_date,
@@ -1041,6 +1101,7 @@ elif menu == "2. Milling & Quality Lab Entry":
                             final_mil_qty,
                             tempering_time,
                             final_temp_water,
+                            final_fin_qty,
                             current_logged_user,
                         ),
                     )
@@ -1067,14 +1128,42 @@ elif menu == "2. Milling & Quality Lab Entry":
                     conn.commit()
                     conn.close()
 
-                    # Send Email Alert
-                    email_subject = f"New Milling Entry by {current_logged_user} - {miller_name}"
-                    email_body = f"Nayi Milling entry darj ki gayi hai:\n\nUser: {current_logged_user}\nMiller: {miller_name}\nMilling Qty: {final_mil_qty:,.2f} kg\nDate: {milling_date}"
+                    # Detailed Email Report for Milling, Finished Goods & Quality
+                    email_subject = f"[REPORT] Milling & Finished Goods Entry - {miller_name}"
+                    email_body = f"""
+BETTER NUTRITION - MILLING, FINISHED GOODS & QUALITY LAB REPORT
+=============================================================
+Neeche nayi Milling aur Quality entry ki poori report di gayi hai:
+
+• Milling Date: {milling_date}
+• Entered By (User): {current_logged_user}
+• Miller Name: {miller_name}
+
+PRODUCTION PARAMETERS:
+• Input Milling Quantity: {final_mil_qty:,.2f} kg
+• Finished Goods Quantity (Produced): {final_fin_qty:,.2f} kg
+• Tempering Time: {tempering_time}
+• Tempering Water: {final_temp_water:,.2f} Ltr
+
+QUALITY LAB TEST PARAMETERS (Test Date: {q_date}):
+• Moisture % (Milled): {final_mois_milled}%
+• Granulation: {granulation}
+• CCL4 Test: {ccl4}
+• Ash + AIA: {final_ash}
+• Alcoholic Acidity: {final_acidity}
+• WAP: {final_wap}
+• Gluten: {gluten}
+• Chapati Sensory: {chapati_sensory}
+
+=============================================================
+Yeh email Better Nutrition ERP System se automatically bheji gayi hai.
+"""
                     send_email_alert(email_subject, email_body)
 
                     st.success(
-                        f"Milling & Quality Data Successfully Saved by"
-                        f" {current_logged_user}!"
+                        f"Milling, Finished Goods & Quality Data Successfully"
+                        f" Saved by {current_logged_user}! Email report sent to"
+                        " Admin."
                     )
                     st.rerun()
 
