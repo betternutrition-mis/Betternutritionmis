@@ -1,4 +1,5 @@
 import datetime
+import os
 import sqlite3
 import pandas as pd
 import streamlit as st
@@ -117,7 +118,10 @@ init_db()
 
 def load_data(table_name):
     conn = get_connection()
-    df = pd.read_sql(f"SELECT * FROM {table_name}", conn)
+    try:
+        df = pd.read_sql(f"SELECT * FROM {table_name}", conn)
+    except Exception:
+        df = pd.DataFrame()
     conn.close()
     return df
 
@@ -867,6 +871,19 @@ elif menu == "6. Master Records & Export (Admin Controls)":
             "Welcome Admin! Aap yahan kisi bhi table ka record delete kar"
             " sakte hain ya data export kar sakte hain."
         )
+
+        # Admin tool to completely reset/fix DB if corrupted
+        if st.button("⚠️ Reset/Recreate Database Tables (Fix Schema Errors)"):
+            try:
+                os.remove("flour_mill_erp.db")
+                init_db()
+                st.success(
+                    "Database successfully reset and recreated without errors!"
+                )
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error: {e}")
+
         tables = [
             "raw_material",
             "milling",
