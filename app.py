@@ -96,7 +96,7 @@ def init_db():
     """)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS finished_goods (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, milling_id INTEGER, production_date TEXT, miller_name TEXT, mfd_date TEXT, expiry_date TEXT, mrp REAL, product_code TEXT, pouch_500g INTEGER, pouch_1kg INTEGER, pouch_2kg INTEGER, pouch_5kg INTEGER, total_finished_qty REAL, bran_qty REAL, bran_pct TEXT, refraction_qty REAL, refraction_pct TEXT, yield_pct TEXT, processing_loss_pct TEXT,
+            id INTEGER PRIMARY KEY AUTOINCREMENT, milling_id INTEGER, production_date TEXT, miller_name TEXT, mfd_date TEXT, expiry_date TEXT, mrp REAL, product_code TEXT, pouch_500g INTEGER, pouch_1kg INTEGER, pouch_2kg INTEGER, pouch_5kg INTEGER, total_finished_qty REAL, bran_qty REAL, bran_pct TEXT, refraction_qty TEXT, refraction_pct TEXT, yield_pct TEXT, processing_loss_pct TEXT,
             FOREIGN KEY(milling_id) REFERENCES milling(id)
         )
     """)
@@ -125,7 +125,7 @@ def load_data(table_name):
 
 
 def format_df_dates(df):
-    """Helper to format date columns in dataframe to dd mmm yyyy"""
+    """Helper to format date columns in dataframe to dd mmm yyyy across all sections"""
     if df.empty:
         return df
     date_cols = [
@@ -180,13 +180,16 @@ if menu == "Month-wise Summary Dashboard":
     if df_rm.empty:
         st.info("Please enter some data entries to view the dashboard.")
     else:
-        df_rm["Month-Year"] = pd.to_datetime(df_rm["rm_date"]).dt.strftime(
-            "%B %Y"
-        )
+        df_rm["Temp_DT"] = pd.to_datetime(df_rm["rm_date"], errors="coerce")
+        df_rm["Month-Year"] = df_rm["Temp_DT"].dt.strftime("%B %Y")
+        available_months = [
+            m for m in df_rm["Month-Year"].dropna().unique()
+        ]
+
         selected_month = st.selectbox(
-            "Filter by Month-Year", ["All"] + list(df_rm["Month-Year"].unique())
+            "Filter by Month-Year", ["All"] + available_months
         )
-        unique_millers = list(df_rm["miller_name"].unique())
+        unique_millers = list(df_rm["miller_name"].dropna().unique())
         selected_miller = st.selectbox(
             "Filter by Miller Name", ["All"] + unique_millers
         )
@@ -200,9 +203,10 @@ if menu == "Month-wise Summary Dashboard":
 
         df_mil = load_data("milling")
         if not df_mil.empty:
-            df_mil["Month-Year"] = pd.to_datetime(
-                df_mil["milling_date"]
-            ).dt.strftime("%B %Y")
+            df_mil["Temp_DT"] = pd.to_datetime(
+                df_mil["milling_date"], errors="coerce"
+            )
+            df_mil["Month-Year"] = df_mil["Temp_DT"].dt.strftime("%B %Y")
         f_mil = df_mil.copy()
         if not f_mil.empty:
             if selected_month != "All":
@@ -215,9 +219,10 @@ if menu == "Month-wise Summary Dashboard":
 
         df_fg = load_data("finished_goods")
         if not df_fg.empty:
-            df_fg["Month-Year"] = pd.to_datetime(
-                df_fg["production_date"]
-            ).dt.strftime("%B %Y")
+            df_fg["Temp_DT"] = pd.to_datetime(
+                df_fg["production_date"], errors="coerce"
+            )
+            df_fg["Month-Year"] = df_fg["Temp_DT"].dt.strftime("%B %Y")
         f_fg = df_fg.copy()
         if not f_fg.empty:
             if selected_month != "All":
@@ -230,9 +235,10 @@ if menu == "Month-wise Summary Dashboard":
 
         df_disp = load_data("dispatch")
         if not df_disp.empty:
-            df_disp["Month-Year"] = pd.to_datetime(
-                df_disp["dispatch_date"]
-            ).dt.strftime("%B %Y")
+            df_disp["Temp_DT"] = pd.to_datetime(
+                df_disp["dispatch_date"], errors="coerce"
+            )
+            df_disp["Month-Year"] = df_disp["Temp_DT"].dt.strftime("%B %Y")
         f_disp = df_disp.copy()
         if not f_disp.empty:
             if selected_month != "All":
@@ -258,7 +264,10 @@ if menu == "Month-wise Summary Dashboard":
 
         st.divider()
         st.subheader("Raw Material Overview Table")
-        display_f_rm = format_df_dates(f_rm.drop(columns=["Month-Year"]))
+        cols_to_drop = [
+            c for c in ["Month-Year", "Temp_DT"] if c in f_rm.columns
+        ]
+        display_f_rm = format_df_dates(f_rm.drop(columns=cols_to_drop))
         st.dataframe(display_f_rm, use_container_width=True)
 
 elif menu == "1. Raw Material Received":
@@ -464,7 +473,6 @@ elif menu == "2. Milling & Quality Lab Entry":
                     " batches!"
                 )
             else:
-                # Format dates for dropdown display nicely
                 untested_mil["formatted_date"] = pd.to_datetime(
                     untested_mil["milling_date"]
                 ).dt.strftime("%d %b %Y")
@@ -476,7 +484,6 @@ elif menu == "2. Milling & Quality Lab Entry":
                     "Select Milling Date", available_dates_formatted
                 )
 
-                # Map back to raw database date string format
                 selected_milling_date = pd.to_datetime(
                     selected_milling_date_fmt, format="%d %b %Y"
                 ).strftime("%Y-%m-%d")
@@ -588,7 +595,6 @@ elif menu == "3. Finished Goods & Yield":
                 " batches!"
             )
         else:
-            # Format date inside batch label nicely as dd mmm yyyy
             pending_mil["formatted_date"] = pd.to_datetime(
                 pending_mil["milling_date"]
             ).dt.strftime("%d %b %Y")
