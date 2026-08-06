@@ -124,6 +124,25 @@ def load_data(table_name):
     return df
 
 
+def format_df_dates(df):
+    """Helper to format date columns in dataframe to dd mmm yyyy"""
+    if df.empty:
+        return df
+    date_cols = [
+        "rm_date",
+        "milling_date",
+        "date",
+        "production_date",
+        "dispatch_date",
+    ]
+    for col in date_cols:
+        if col in df.columns:
+            df[col] = pd.to_datetime(df[col], errors="coerce").dt.strftime(
+                "%d %b %Y"
+            )
+    return df
+
+
 menu = st.sidebar.selectbox(
     "Navigation Menu",
     [
@@ -239,12 +258,8 @@ if menu == "Month-wise Summary Dashboard":
 
         st.divider()
         st.subheader("Raw Material Overview Table")
-        st.dataframe(
-            f_rm.drop(columns=["Month-Year"])
-            if "Month-Year" in f_rm.columns
-            else f_rm,
-            use_container_width=True,
-        )
+        display_f_rm = format_df_dates(f_rm.drop(columns=["Month-Year"]))
+        st.dataframe(display_f_rm, use_container_width=True)
 
 elif menu == "1. Raw Material Received":
     st.header("Raw Material Received Entry")
@@ -252,7 +267,8 @@ elif menu == "1. Raw Material Received":
     with st.form("rm_form", clear_on_submit=True):
         c1, c2, c3 = st.columns(3)
         with c1:
-            rm_date = str(st.date_input("RM Date", datetime.date.today()))
+            rm_date_obj = st.date_input("RM Date", datetime.date.today())
+            rm_date = str(rm_date_obj)
             vendor_name = st.text_input("Vendor Name", value="")
             vehicle_no = st.text_input(
                 "Vehicle Number", placeholder="e.g. UP-75-AT-5079"
@@ -320,12 +336,8 @@ elif menu == "1. Raw Material Received":
     st.subheader("Saved Raw Material Entries")
     df_rm_saved = load_data("raw_material")
     if not df_rm_saved.empty:
-        st.dataframe(
-            df_rm_saved.drop(columns=["id"])
-            if "id" in df_rm_saved.columns
-            else df_rm_saved,
-            use_container_width=True,
-        )
+        disp_df = format_df_dates(df_rm_saved.drop(columns=["id"]))
+        st.dataframe(disp_df, use_container_width=True)
 
 elif menu == "2. Milling & Quality Lab Entry":
     st.header("Milling Processing & Quality Lab Entry")
@@ -343,9 +355,10 @@ elif menu == "2. Milling & Quality Lab Entry":
             st.subheader("1. Milling Parameters")
             c1, c2 = st.columns(2)
             with c1:
-                milling_date = str(
-                    st.date_input("Milling Date", datetime.date.today())
+                milling_date_obj = st.date_input(
+                    "Milling Date", datetime.date.today()
                 )
+                milling_date = str(milling_date_obj)
                 milling_qty = st.number_input(
                     "Milling Quantity (kg)", min_value=0.0, value=0.0, step=10.0
                 )
@@ -359,9 +372,10 @@ elif menu == "2. Milling & Quality Lab Entry":
             st.subheader("2. Quality Lab Parameters")
             qc1, qc2, qc3 = st.columns(3)
             with qc1:
-                q_date = str(
-                    st.date_input("Lab Test Date", datetime.date.today())
+                q_date_obj = st.date_input(
+                    "Lab Test Date", datetime.date.today()
                 )
+                q_date = str(q_date_obj)
                 moisture_milled = st.number_input(
                     "Moisture % (Milled)",
                     min_value=0.0,
@@ -450,18 +464,27 @@ elif menu == "2. Milling & Quality Lab Entry":
                     " batches!"
                 )
             else:
-                # Step 1: Select Milling Date from available untested dates
-                available_dates = sorted(untested_mil["milling_date"].unique())
-                selected_milling_date = st.selectbox(
-                    "Select Milling Date", available_dates
+                # Format dates for dropdown display nicely
+                untested_mil["formatted_date"] = pd.to_datetime(
+                    untested_mil["milling_date"]
+                ).dt.strftime("%d %b %Y")
+                available_dates_formatted = sorted(
+                    untested_mil["formatted_date"].unique()
                 )
 
-                # Filter batches matching the selected date
+                selected_milling_date_fmt = st.selectbox(
+                    "Select Milling Date", available_dates_formatted
+                )
+
+                # Map back to raw database date string format
+                selected_milling_date = pd.to_datetime(
+                    selected_milling_date_fmt, format="%d %b %Y"
+                ).strftime("%Y-%m-%d")
+
                 date_matched_batches = untested_mil[
                     untested_mil["milling_date"] == selected_milling_date
                 ]
 
-                # Step 2: Select Miller for that date
                 miller_options = date_matched_batches[
                     "miller_name"
                 ].tolist()
@@ -469,14 +492,12 @@ elif menu == "2. Milling & Quality Lab Entry":
                     "Select Miller Name", miller_options
                 )
 
-                # Fetch specific batch row
                 selected_batch_row = date_matched_batches[
                     date_matched_batches["miller_name"] == selected_miller_name
                 ].iloc[0]
                 target_m_id = int(selected_batch_row["id"])
                 batch_qty = selected_batch_row["milling_qty"]
 
-                # Display only unique batch summary (Batch ID & Qty) without repeating date or miller name
                 st.info(
                     f"Selected Batch ID: **{target_m_id}** | Milling Qty:"
                     f" **{batch_qty} kg**"
@@ -508,7 +529,6 @@ elif menu == "2. Milling & Quality Lab Entry":
                         "Save Quality for this Batch"
                     )
                     if submit_old_q:
-                        # Automatically use the selected milling date as lab test date to avoid extra date inputs
                         conn = get_connection()
                         cursor = conn.cursor()
                         cursor.execute(
@@ -540,7 +560,7 @@ elif menu == "2. Milling & Quality Lab Entry":
     st.subheader("Saved Milling Records")
     df_mil_saved = load_data("milling")
     if not df_mil_saved.empty:
-        st.dataframe(df_mil_saved, use_container_width=True)
+        st.dataframe(format_df_dates(df_mil_saved), use_container_width=True)
 
 elif menu == "3. Finished Goods & Yield":
     st.header(
@@ -568,13 +588,17 @@ elif menu == "3. Finished Goods & Yield":
                 " batches!"
             )
         else:
+            # Format date inside batch label nicely as dd mmm yyyy
+            pending_mil["formatted_date"] = pd.to_datetime(
+                pending_mil["milling_date"]
+            ).dt.strftime("%d %b %Y")
             pending_mil["batch_label"] = (
                 "Batch ID: "
                 + pending_mil["id"].astype(str)
                 + " | Miller: "
                 + pending_mil["miller_name"]
                 + " | Date: "
-                + pending_mil["milling_date"]
+                + pending_mil["formatted_date"]
                 + " | Qty: "
                 + pending_mil["milling_qty"].astype(str)
                 + " kg"
@@ -591,22 +615,24 @@ elif menu == "3. Finished Goods & Yield":
             selected_milling_id = int(selected_row["id"])
             miller_name = selected_row["miller_name"]
             milling_date = selected_row["milling_date"]
+            formatted_milling_date = pd.to_datetime(milling_date).strftime(
+                "%d %b %Y"
+            )
             input_milling_qty = float(selected_row["milling_qty"])
 
             st.info(
                 f"You are filling Finished Goods for **{miller_name}** on"
-                f" **{milling_date}** (Batch ID: {selected_milling_id} | Milling"
-                f" Qty: {input_milling_qty} kg)."
+                f" **{formatted_milling_date}** (Batch ID: {selected_milling_id}"
+                f" | Milling Qty: {input_milling_qty} kg)."
             )
 
             with st.form("fg_form", clear_on_submit=True):
                 c1, c2, c3 = st.columns(3)
                 with c1:
-                    production_date = str(
-                        st.date_input(
-                            "Production Date", datetime.date.today()
-                        )
+                    prod_date_obj = st.date_input(
+                        "Production Date", datetime.date.today()
                     )
+                    production_date = str(prod_date_obj)
                     mfd_date = st.text_input(
                         "MFD Date Text", placeholder="e.g. Aug 2026"
                     )
@@ -715,12 +741,8 @@ elif menu == "3. Finished Goods & Yield":
 
     st.subheader("Saved Finished Goods Records")
     if not df_fg_saved.empty:
-        st.dataframe(
-            df_fg_saved.drop(columns=["id"])
-            if "id" in df_fg_saved.columns
-            else df_fg_saved,
-            use_container_width=True,
-        )
+        disp_df = format_df_dates(df_fg_saved.drop(columns=["id"]))
+        st.dataframe(disp_df, use_container_width=True)
 
 elif menu == "4. Better Nutrition Packing Material":
     st.header("Better Nutrition Packing Material Dispatch Entry")
@@ -728,7 +750,8 @@ elif menu == "4. Better Nutrition Packing Material":
     with st.form("pm_form", clear_on_submit=True):
         c1, c2, c3 = st.columns(3)
         with c1:
-            pm_date = str(st.date_input("Entry Date", datetime.date.today()))
+            pm_date_obj = st.date_input("Entry Date", datetime.date.today())
+            pm_date = str(pm_date_obj)
             carton_type = st.selectbox(
                 "Carton Type", ["Standard 10kg", "Standard 20kg", "Custom"]
             )
@@ -781,12 +804,8 @@ elif menu == "4. Better Nutrition Packing Material":
     st.subheader("Saved Packing Material Dispatches")
     df_pm_saved = load_data("packing_material")
     if not df_pm_saved.empty:
-        st.dataframe(
-            df_pm_saved.drop(columns=["id"])
-            if "id" in df_pm_saved.columns
-            else df_pm_saved,
-            use_container_width=True,
-        )
+        disp_df = format_df_dates(df_pm_saved.drop(columns=["id"]))
+        st.dataframe(disp_df, use_container_width=True)
 
 elif menu == "5. Daily Dispatch Entry":
     st.header("Daily Finished Goods Dispatch Entry")
@@ -794,9 +813,10 @@ elif menu == "5. Daily Dispatch Entry":
     with st.form("dispatch_form", clear_on_submit=True):
         c1, c2, c3 = st.columns(3)
         with c1:
-            dispatch_date = str(
-                st.date_input("Dispatch Date", datetime.date.today())
+            disp_date_obj = st.date_input(
+                "Dispatch Date", datetime.date.today()
             )
+            dispatch_date = str(disp_date_obj)
             vehicle_no = st.text_input("Vehicle Number", value="")
         with c2:
             disp_500g = st.number_input(
@@ -855,12 +875,8 @@ elif menu == "5. Daily Dispatch Entry":
     st.subheader("Saved Dispatch Records")
     df_disp_saved = load_data("dispatch")
     if not df_disp_saved.empty:
-        st.dataframe(
-            df_disp_saved.drop(columns=["id"])
-            if "id" in df_disp_saved.columns
-            else df_disp_saved,
-            use_container_width=True,
-        )
+        disp_df = format_df_dates(df_disp_saved.drop(columns=["id"]))
+        st.dataframe(disp_df, use_container_width=True)
 
 elif menu == "6. Master Records & Export (Admin Controls)":
     st.header("Master Records, Delete/Edit & Data Export Center")
@@ -885,7 +901,7 @@ elif menu == "6. Master Records & Export (Admin Controls)":
         )
         df_master = load_data(selected_table)
         st.write(f"Showing records for table: **{selected_table}**")
-        st.dataframe(df_master, use_container_width=True)
+        st.dataframe(format_df_dates(df_master), use_container_width=True)
 
         if not df_master.empty and "id" in df_master.columns:
             st.divider()
