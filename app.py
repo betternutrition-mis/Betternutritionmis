@@ -91,9 +91,15 @@ def init_db():
     """)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS quality (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, milling_id INTEGER, test_date TEXT, miller_name TEXT, moisture_milled REAL, granulation TEXT, ccl4 TEXT, ash_aia REAL, alcoholic_acidity REAL, gluten TEXT, chapati_sensory TEXT
+            id INTEGER PRIMARY KEY AUTOINCREMENT, milling_id INTEGER, test_date TEXT, miller_name TEXT, moisture_milled REAL, granulation TEXT, ccl4 TEXT, ash_aia REAL, alcoholic_acidity REAL, wap REAL, gluten TEXT, chapati_sensory TEXT
         )
     """)
+    # Migration safety check for existing databases without 'wap' column
+    try:
+        cursor.execute("ALTER TABLE quality ADD COLUMN wap REAL")
+    except Exception:
+        pass
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS finished_goods (
             id INTEGER PRIMARY KEY AUTOINCREMENT, milling_id INTEGER, production_date TEXT, miller_name TEXT, mfd_date TEXT, expiry_date TEXT, mrp REAL, product_code TEXT, pouch_500g INTEGER, pouch_1kg INTEGER, pouch_2kg INTEGER, pouch_5kg INTEGER, total_finished_qty REAL, bran_qty REAL, bran_pct TEXT, refraction_qty REAL, refraction_pct TEXT, yield_pct TEXT, processing_loss_pct TEXT
@@ -532,6 +538,9 @@ elif menu == "2. Milling & Quality Lab Entry":
                     "Alcoholic Acidity", min_value=0.0, value=0.0, step=0.001, format="%.4f"
                 )
             with qc3:
+                wap = st.number_input(
+                    "WAP", min_value=0.0, value=0.0, step=0.01, format="%.2f"
+                )
                 gluten = st.text_input("Gluten", value="")
                 chapati_sensory = st.selectbox(
                     "Chapati Sensory",
@@ -560,8 +569,8 @@ elif menu == "2. Milling & Quality Lab Entry":
                 milling_id = cursor.lastrowid
                 cursor.execute(
                     """
-                    INSERT INTO quality (milling_id, test_date, miller_name, moisture_milled, granulation, ccl4, ash_aia, alcoholic_acidity, gluten, chapati_sensory)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO quality (milling_id, test_date, miller_name, moisture_milled, granulation, ccl4, ash_aia, alcoholic_acidity, wap, gluten, chapati_sensory)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                     (
                         milling_id,
@@ -572,6 +581,7 @@ elif menu == "2. Milling & Quality Lab Entry":
                         ccl4,
                         ash_aia,
                         alcoholic_acidity,
+                        wap,
                         gluten,
                         chapati_sensory,
                     ),
@@ -603,7 +613,7 @@ elif menu == "2. Milling & Quality Lab Entry":
 
             if untested_mil.empty:
                 st.success(
-                    "Sabhi purane milling batches ki quality entry pehle se ho"
+                    "Sabhi purane milling batches ki quality entry pehle से ho"
                     " chuki hai!"
                 )
             else:
@@ -647,6 +657,9 @@ elif menu == "2. Milling & Quality Lab Entry":
                     oacidity = st.number_input(
                         "Alcoholic Acidity", min_value=0.0, value=0.0, step=0.001, format="%.4f"
                     )
+                    owap = st.number_input(
+                        "WAP", min_value=0.0, value=0.0, step=0.01, format="%.2f"
+                    )
                     ogluten = st.text_input("Gluten", value="")
                     osensory = st.selectbox(
                         "Chapati Sensory",
@@ -661,8 +674,8 @@ elif menu == "2. Milling & Quality Lab Entry":
                         cursor = conn.cursor()
                         cursor.execute(
                             """
-                            INSERT INTO quality (milling_id, test_date, miller_name, moisture_milled, granulation, ccl4, ash_aia, alcoholic_acidity, gluten, chapati_sensory)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            INSERT INTO quality (milling_id, test_date, miller_name, moisture_milled, granulation, ccl4, ash_aia, alcoholic_acidity, wap, gluten, chapati_sensory)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                             (
                                 target_m_id,
@@ -673,6 +686,7 @@ elif menu == "2. Milling & Quality Lab Entry":
                                 occl4,
                                 oash,
                                 oacidity,
+                                owap,
                                 ogluten,
                                 osensory,
                             ),
