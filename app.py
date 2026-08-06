@@ -374,9 +374,7 @@ elif menu == "2. Milling & Processing":
     st.subheader("Saved Milling Entries & Batch IDs")
     df_mil_saved = load_data("milling")
     if not df_mil_saved.empty:
-        st.dataframe(
-            df_mil_saved, use_container_width=True
-        )  # ID dikhana zaroori hai batch tracking ke liye
+        st.dataframe(df_mil_saved, use_container_width=True)
 
 elif menu == "3. Quality Lab Parameters":
     st.header("Quality Lab Parameters Entry (Linked to Milling Batch)")
@@ -389,7 +387,6 @@ elif menu == "3. Quality Lab Parameters":
             " test bhar paayenge."
         )
     else:
-        # Filter out milling batches that already have quality test entered
         completed_milling_ids = (
             df_q_saved["milling_id"].tolist()
             if not df_q_saved.empty and "milling_id" in df_q_saved.columns
@@ -403,7 +400,6 @@ elif menu == "3. Quality Lab Parameters":
                 " hain!"
             )
         else:
-            # Create a selection label showing Batch ID, Miller Name, Date, and Qty
             pending_mil["batch_label"] = (
                 "Batch ID: "
                 + pending_mil["id"].astype(str)
@@ -430,7 +426,7 @@ elif menu == "3. Quality Lab Parameters":
 
             st.info(
                 f"Aap **{miller_name}** ke **{milling_date}** wale milling"
-                " batch (ID: {selected_milling_id}) ke liye Quality details"
+                f" batch (ID: {selected_milling_id}) ke liye Quality details"
                 " bhar rahe hain."
             )
 
@@ -516,7 +512,6 @@ elif menu == "4. Finished Goods & Yield":
             " Goods bhar paayenge."
         )
     else:
-        # Filter out milling batches that already have Finished Goods entered
         completed_fg_ids = (
             df_fg_saved["milling_id"].tolist()
             if not df_fg_saved.empty and "milling_id" in df_fg_saved.columns
@@ -544,4 +539,317 @@ elif menu == "4. Finished Goods & Yield":
 
             selected_batch_label = st.selectbox(
                 "Select Milling Batch for Finished Goods",
-                pending_mil["batch_label"].
+                pending_mil["batch_label"].tolist(),
+            )
+            selected_row = pending_mil[
+                pending_mil["batch_label"] == selected_batch_label
+            ].iloc[0]
+
+            selected_milling_id = int(selected_row["id"])
+            miller_name = selected_row["miller_name"]
+            milling_date = selected_row["milling_date"]
+            input_milling_qty = float(selected_row["milling_qty"])
+
+            st.info(
+                f"Aap **{miller_name}** ke **{milling_date}** wale milling"
+                f" batch (ID: {selected_milling_id}) ke liye Finished Goods"
+                f" bhar rahe hain (Milling Qty: {input_milling_qty} kg)."
+            )
+
+            with st.form("fg_form", clear_on_submit=True):
+                c1, c2, c3 = st.columns(3)
+                with c1:
+                    production_date = str(
+                        st.date_input(
+                            "Production Date", datetime.date.today()
+                        )
+                    )
+                    mfd_date = st.text_input(
+                        "MFD Date Text", placeholder="e.g. Aug 2026"
+                    )
+                    expiry_date = st.text_input(
+                        "Expiry Date Text", placeholder="e.g. Feb 2027"
+                    )
+                with c2:
+                    mrp = st.number_input(
+                        "MRP per Pack (₹)", min_value=0.0, value=0.0, step=1.0
+                    )
+                    product_code = st.text_input(
+                        "Product Code / SKU Desc", value="Atta 1kg"
+                    )
+                    pouch_500g = st.number_input(
+                        "500g Pouches Count", min_value=0, value=0, step=1
+                    )
+                with c3:
+                    pouch_1kg = st.number_input(
+                        "1kg Pouches Count", min_value=0, value=0, step=1
+                    )
+                    pouch_2kg = st.number_input(
+                        "2kg Pouches Count", min_value=0, value=0, step=1
+                    )
+                    pouch_5kg = st.number_input(
+                        "5kg Pouches Count", min_value=0, value=0, step=1
+                    )
+
+                c4, c5 = st.columns(2)
+                with c4:
+                    bran_qty = st.number_input(
+                        "Bran Quantity (kg)",
+                        min_value=0.0,
+                        value=0.0,
+                        step=1.0,
+                    )
+                with c5:
+                    refraction_qty = st.number_input(
+                        "Refraction Quantity (kg)",
+                        min_value=0.0,
+                        value=0.0,
+                        step=1.0,
+                    )
+
+                submit_fg = st.form_submit_button(
+                    label="Calculate & Save Finished Goods"
+                )
+                if submit_fg:
+                    total_fg_wt = (
+                        (pouch_500g * 0.5)
+                        + (pouch_1kg * 1.0)
+                        + (pouch_2kg * 2.0)
+                        + (pouch_5kg * 5.0)
+                    )
+                    bran_pct = (
+                        (bran_qty / input_milling_qty) * 100
+                        if input_milling_qty > 0
+                        else 0.0
+                    )
+                    refraction_pct = (
+                        (refraction_qty / input_milling_qty) * 100
+                        if input_milling_qty > 0
+                        else 0.0
+                    )
+                    yield_pct = (
+                        (total_fg_wt / input_milling_qty) * 100
+                        if input_milling_qty > 0
+                        else 0.0
+                    )
+                    proc_loss_pct = 100.0 - (yield_pct + bran_pct + refraction_pct)
+
+                    conn = get_connection()
+                    cursor = conn.cursor()
+                    cursor.execute(
+                        """
+                        INSERT INTO finished_goods (milling_id, production_date, miller_name, mfd_date, expiry_date, mrp, product_code, pouch_500g, pouch_1kg, pouch_2kg, pouch_5kg, total_finished_qty, bran_qty, bran_pct, refraction_qty, refraction_pct, yield_pct, processing_loss_pct)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                        (
+                            selected_milling_id,
+                            production_date,
+                            miller_name,
+                            mfd_date,
+                            expiry_date,
+                            mrp,
+                            product_code,
+                            pouch_500g,
+                            pouch_1kg,
+                            pouch_2kg,
+                            pouch_5kg,
+                            round(total_fg_wt, 2),
+                            bran_qty,
+                            f"{bran_pct:.2f}%",
+                            refraction_qty,
+                            f"{refraction_pct:.2f}%",
+                            f"{yield_pct:.2f}%",
+                            f"{proc_loss_pct:.2f}%",
+                        ),
+                    )
+                    conn.commit()
+                    conn.close()
+                    st.success(
+                        f"Finished Goods Saved! Total FG: {total_fg_wt:.2f} kg |"
+                        f" Yield: {yield_pct:.2f}%"
+                    )
+                    st.rerun()
+
+    st.subheader("Saved Finished Goods Records")
+    if not df_fg_saved.empty:
+        st.dataframe(
+            df_fg_saved.drop(columns=["id"])
+            if "id" in df_fg_saved.columns
+            else df_fg_saved,
+            use_container_width=True,
+        )
+
+elif menu == "5. Better Nutrition Packing Material":
+    st.header("Better Nutrition Packing Material Dispatch Entry")
+    miller_name = get_miller_input("pm")
+    with st.form("pm_form", clear_on_submit=True):
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            pm_date = str(st.date_input("Entry Date", datetime.date.today()))
+            carton_type = st.selectbox(
+                "Carton Type", ["Standard 10kg", "Standard 20kg", "Custom"]
+            )
+            cartons_sent = st.number_input(
+                "Cartons Sent (Nos)", min_value=0, value=0, step=1
+            )
+        with c2:
+            tape_sent = st.number_input(
+                "Tape Rolls Sent", min_value=0, value=0, step=1
+            )
+            oxysorb_qty = st.number_input(
+                "OxySorb Packets Sent", min_value=0, value=0, step=100
+            )
+        with c3:
+            roll_sku = st.text_input("Roll SKU Name", value="1kg Laminate Roll")
+            roll_qty_sent = st.number_input(
+                "Roll Quantity Sent (kg or Nos)",
+                min_value=0.0,
+                value=0.0,
+                step=1.0,
+            )
+        submit_pm = st.form_submit_button(
+            label="Save Packing Material & Reset"
+        )
+        if submit_pm:
+            conn = get_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO packing_material (date, miller_name, carton_type, cartons_sent, tape_sent, oxysorb_qty, roll_sku, roll_qty_sent)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+                (
+                    pm_date,
+                    miller_name,
+                    carton_type,
+                    cartons_sent,
+                    tape_sent,
+                    oxysorb_qty,
+                    roll_sku,
+                    roll_qty_sent,
+                ),
+            )
+            conn.commit()
+            conn.close()
+            st.success(
+                f"Packing Material Inventory Logged for {miller_name}!"
+            )
+
+    st.subheader("Saved Packing Material Dispatches")
+    df_pm_saved = load_data("packing_material")
+    if not df_pm_saved.empty:
+        st.dataframe(
+            df_pm_saved.drop(columns=["id"])
+            if "id" in df_pm_saved.columns
+            else df_pm_saved,
+            use_container_width=True,
+        )
+
+elif menu == "6. Daily Dispatch Entry":
+    st.header("Daily Finished Goods Dispatch Entry")
+    miller_name = get_miller_input("disp")
+    with st.form("dispatch_form", clear_on_submit=True):
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            dispatch_date = str(
+                st.date_input("Dispatch Date", datetime.date.today())
+            )
+            vehicle_no = st.text_input("Vehicle Number", value="")
+        with c2:
+            disp_500g = st.number_input(
+                "Dispatched 500g Pouches", min_value=0, value=0, step=1
+            )
+            disp_1kg = st.number_input(
+                "Dispatched 1kg Pouches", min_value=0, value=0, step=1
+            )
+        with c3:
+            disp_2kg = st.number_input(
+                "Dispatched 2kg Pouches", min_value=0, value=0, step=1
+            )
+            disp_5kg = st.number_input(
+                "Dispatched 5kg Pouches", min_value=0, value=0, step=1
+            )
+        cartons_used = st.number_input(
+            "Cartons Used", min_value=0, value=0, step=1
+        )
+        remarks = st.text_input("Dispatch Remarks / Destination", value="")
+        submit_disp = st.form_submit_button(
+            label="Save Dispatch & Update Stock"
+        )
+        if submit_disp:
+            total_disp_wt = (
+                (disp_500g * 0.5)
+                + (disp_1kg * 1.0)
+                + (disp_2kg * 2.0)
+                + (disp_5kg * 5.0)
+            )
+            conn = get_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO dispatch (dispatch_date, miller_name, vehicle_no, disp_500g, disp_1kg, disp_2kg, disp_5kg, total_dispatched_wt, cartons_used, remarks)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+                (
+                    dispatch_date,
+                    miller_name,
+                    vehicle_no,
+                    disp_500g,
+                    disp_1kg,
+                    disp_2kg,
+                    disp_5kg,
+                    round(total_disp_wt, 2),
+                    cartons_used,
+                    remarks,
+                ),
+            )
+            conn.commit()
+            conn.close()
+            st.success(
+                f"Dispatch Saved! Total Weight Dispatched: {total_disp_wt:,.2f} kg"
+            )
+
+    st.subheader("Saved Dispatch Records")
+    df_disp_saved = load_data("dispatch")
+    if not df_disp_saved.empty:
+        st.dataframe(
+            df_disp_saved.drop(columns=["id"])
+            if "id" in df_disp_saved.columns
+            else df_disp_saved,
+            use_container_width=True,
+        )
+
+elif menu == "7. Master Records & Export (Admin Controls)":
+    st.header("Master Records & Full Data Export Center")
+    if user_role != "Admin":
+        st.error(
+            "Access Denied! Ye section sirf Admin (Rishabh@1994) ke liye hai."
+        )
+    else:
+        st.success(
+            "Welcome Admin! Aap yahan sabhi tables ka data dekh aur download"
+            " kar sakte hain."
+        )
+        tables = [
+            "raw_material",
+            "milling",
+            "quality",
+            "finished_goods",
+            "packing_material",
+            "dispatch",
+        ]
+        selected_table = st.selectbox(
+            "Choose Database Table to View/Export", tables
+        )
+        df_master = load_data(selected_table)
+        st.write(f"Showing records for table: **{selected_table}**")
+        st.dataframe(df_master, use_container_width=True)
+
+        if not df_master.empty:
+            csv_data = df_master.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                label=f"Download {selected_table} as CSV",
+                data=csv_data,
+                file_name=f"{selected_table}_export.csv",
+                mime="text/csv",
+            )
