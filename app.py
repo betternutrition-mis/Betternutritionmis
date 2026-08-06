@@ -82,7 +82,10 @@ def init_db():
     conn = get_connection()
     cursor = conn.cursor()
 
-    # Tables creation with IF NOT EXISTS
+    # Sabhi tables standard create karenge
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS raw_manager_backup (id INTEGER PRIMARY KEY AUTOINCREMENT)
+    """)  # dummy check
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS raw_material (
             id INTEGER PRIMARY KEY AUTOINCREMENT, rm_date TEXT, miller_name TEXT, vendor_name TEXT, vehicle_number TEXT, hectoliter_weight REAL, moisture_rm REAL, broken_pct REAL, infestation TEXT, jute_bags INTEGER, gross_qty REAL, jute_weight REAL, net_weight REAL, remarks TEXT
@@ -91,11 +94,6 @@ def init_db():
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS milling (
             id INTEGER PRIMARY KEY AUTOINCREMENT, milling_date TEXT, miller_name TEXT, milling_qty REAL, tempering_time TEXT, tempering_water REAL
-        )
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS quality (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, milling_id INTEGER, test_date TEXT, miller_name TEXT, moisture_milled REAL, granulation TEXT, ccl4 TEXT, ash_aia REAL, alcoholic_acidity REAL, gluten TEXT, chapati_sensory TEXT
         )
     """)
     cursor.execute("""
@@ -114,12 +112,46 @@ def init_db():
         )
     """)
 
-    # Safe Column Addition with PRAGMA check to avoid any duplicate column crash
-    cursor.execute("PRAGMA table_info(quality);")
-    columns = [col[1] for col in cursor.fetchall()]
-    if "test_date" not in columns:
+    # Yahan asli game hai: Check karenge ki 'quality' table mein 'test_date' column hai ya nahi.
+    # Agar purani table mein columns ka panga hai, toh safe tarike se table recreate karenge bina data khoye.
+    cursor.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='quality';"
+    )
+    table_exists = cursor.fetchone()
+
+    if table_exists:
+        cursor.execute("PRAGMA table_info(quality);")
+        columns = [col[1] for col in cursor.fetchall()]
+        if "test_date" not in columns:
+            # Purani quality table ka data bachane ke liye temporary backup table banayenge
+            try:
+                cursor.execute(
+                    "CREATE TABLE quality_old_backup AS SELECT * FROM quality;"
+                )
+                cursor.execute("DROP TABLE quality;")
+            except Exception:
+                pass
+
+    # Nayi/Clean Quality Table with test_date column
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS quality (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, milling_id INTEGER, test_date TEXT, miller_name TEXT, moisture_milled REAL, granulation TEXT, ccl4 TEXT, ash_aia REAL, alcoholic_acidity REAL, gluten TEXT, chapati_sensory TEXT
+        )
+    """)
+
+    # Agar backup se data wapas dalna ho
+    cursor.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND"
+        " name='quality_old_backup';"
+    )
+    if cursor.fetchone():
         try:
-            cursor.execute("ALTER TABLE quality ADD COLUMN test_date TEXT")
+            # Purane columns ko naye columns ke sath map karke insert karna
+            cursor.execute("""
+                INSERT INTO quality (id, milling_id, miller_name, moisture_milled, granulation, ccl4, ash_aia, alcoholic_acidity, gluten, chapati_sensory)
+                SELECT id, milling_id, miller_name, moisture_milled, granulation, ccl4, ash_aia, alcoholic_acidity, gluten, chapati_sensory FROM quality_old_backup;
+            """)
+            cursor.execute("DROP TABLE quality_old_backup;")
         except Exception:
             pass
 
@@ -883,7 +915,7 @@ elif menu == "6. Master Records & Export (Admin Controls)":
     else:
         st.success(
             "Welcome Admin! Aap yahan kisi bhi table ka record delete kar"
-            " sakte hain ya data export kar सकते हैं."
+            " sakte hain ya data export कर सकते हैं."
         )
 
         tables = [
