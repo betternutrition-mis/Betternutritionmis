@@ -36,7 +36,7 @@ def check_password():
 
     if "password_correct" not in st.session_state:
         st.text_input(
-            "Enter password to unlock application:",
+            "Password daliye app kholne ke liye:",
             type="password",
             on_change=password_entered,
             key="password",
@@ -44,12 +44,12 @@ def check_password():
         return False
     elif not st.session_state["password_correct"]:
         st.text_input(
-            "Enter password to unlock application:",
+            "Password daliye app kholne ke liye:",
             type="password",
             on_change=password_entered,
             key="password",
         )
-        st.error("Incorrect password. Please try again.")
+        st.error("Password galat hai. Dobara koshish karein.")
         return False
     else:
         return True
@@ -90,19 +90,17 @@ def init_db():
     """)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS quality (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, milling_id INTEGER, date TEXT, miller_name TEXT, moisture_milled REAL, granulation TEXT, ccl4 TEXT, ash_aia REAL, alcoholic_acidity REAL, gluten TEXT, chapati_sensory TEXT,
-            FOREIGN KEY(milling_id) REFERENCES milling(id)
+            id INTEGER PRIMARY KEY AUTOINCREMENT, milling_id INTEGER, date TEXT, miller_name TEXT, moisture_milled REAL, granulation TEXT, ccl4 TEXT, ash_aia REAL, alcoholic_acidity REAL, gluten TEXT, chapati_sensory TEXT
         )
     """)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS finished_goods (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, milling_id INTEGER, production_date TEXT, miller_name TEXT, mfd_date TEXT, expiry_date TEXT, mrp REAL, product_code TEXT, pouch_500g INTEGER, pouch_1kg INTEGER, pouch_2kg INTEGER, pouch_5kg INTEGER, total_finished_qty REAL, bran_qty REAL, bran_pct TEXT, refraction_qty TEXT, refraction_pct TEXT, yield_pct TEXT, processing_loss_pct TEXT,
-            FOREIGN KEY(milling_id) REFERENCES milling(id)
+            id INTEGER PRIMARY KEY AUTOINCREMENT, milling_id INTEGER, production_date TEXT, miller_name TEXT, mfd_date TEXT, expiry_date TEXT, mrp REAL, product_code TEXT, pouch_500g INTEGER, pouch_1kg INTEGER, pouch_2kg INTEGER, pouch_5kg INTEGER, total_finished_qty REAL, bran_qty REAL, bran_pct TEXT, refraction_qty REAL, refraction_pct TEXT, yield_pct TEXT, processing_loss_pct TEXT
         )
     """)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS packing_material (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT, miller_name TEXT, carton_type TEXT, cartons_sent INTEGER, tape_sent INTEGER, oxysorb_qty INTEGER, roll_sku TEXT, roll_qty_sent INTEGER
+            id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT, miller_name TEXT, carton_type TEXT, cartons_sent INTEGER, tape_sent INTEGER, oxysorb_qty INTEGER, roll_sku TEXT, roll_qty_sent REAL
         )
     """)
     cursor.execute("""
@@ -121,25 +119,6 @@ def load_data(table_name):
     conn = get_connection()
     df = pd.read_sql(f"SELECT * FROM {table_name}", conn)
     conn.close()
-    return df
-
-
-def format_df_dates(df):
-    """Universal helper to format all known date columns in any dataframe to dd mmm yyyy"""
-    if df.empty:
-        return df
-    date_cols = [
-        "rm_date",
-        "milling_date",
-        "date",
-        "production_date",
-        "dispatch_date",
-    ]
-    for col in date_cols:
-        if col in df.columns:
-            df[col] = pd.to_datetime(df[col], errors="coerce").dt.strftime(
-                "%d %b %Y"
-            )
     return df
 
 
@@ -178,18 +157,15 @@ if menu == "Month-wise Summary Dashboard":
     st.header("Executive Month-wise Summary & Stock Dashboard")
     df_rm = load_data("raw_material")
     if df_rm.empty:
-        st.info("Please enter some data entries to view the dashboard.")
+        st.info("Pehle kuch data entries karein tab dashboard show hoga.")
     else:
-        df_rm["Temp_DT"] = pd.to_datetime(df_rm["rm_date"], errors="coerce")
-        df_rm["Month-Year"] = df_rm["Temp_DT"].dt.strftime("%B %Y")
-        available_months = [
-            m for m in df_rm["Month-Year"].dropna().unique()
-        ]
-
-        selected_month = st.selectbox(
-            "Filter by Month-Year", ["All"] + available_months
+        df_rm["Month-Year"] = pd.to_datetime(df_rm["rm_date"]).dt.strftime(
+            "%B %Y"
         )
-        unique_millers = list(df_rm["miller_name"].dropna().unique())
+        selected_month = st.selectbox(
+            "Filter by Month-Year", ["All"] + list(df_rm["Month-Year"].unique())
+        )
+        unique_millers = list(df_rm["miller_name"].unique())
         selected_miller = st.selectbox(
             "Filter by Miller Name", ["All"] + unique_millers
         )
@@ -203,10 +179,9 @@ if menu == "Month-wise Summary Dashboard":
 
         df_mil = load_data("milling")
         if not df_mil.empty:
-            df_mil["Temp_DT"] = pd.to_datetime(
-                df_mil["milling_date"], errors="coerce"
-            )
-            df_mil["Month-Year"] = df_mil["Temp_DT"].dt.strftime("%B %Y")
+            df_mil["Month-Year"] = pd.to_datetime(
+                df_mil["milling_date"]
+            ).dt.strftime("%B %Y")
         f_mil = df_mil.copy()
         if not f_mil.empty:
             if selected_month != "All":
@@ -219,10 +194,9 @@ if menu == "Month-wise Summary Dashboard":
 
         df_fg = load_data("finished_goods")
         if not df_fg.empty:
-            df_fg["Temp_DT"] = pd.to_datetime(
-                df_fg["production_date"], errors="coerce"
-            )
-            df_fg["Month-Year"] = df_fg["Temp_DT"].dt.strftime("%B %Y")
+            df_fg["Month-Year"] = pd.to_datetime(
+                df_fg["production_date"]
+            ).dt.strftime("%B %Y")
         f_fg = df_fg.copy()
         if not f_fg.empty:
             if selected_month != "All":
@@ -235,10 +209,9 @@ if menu == "Month-wise Summary Dashboard":
 
         df_disp = load_data("dispatch")
         if not df_disp.empty:
-            df_disp["Temp_DT"] = pd.to_datetime(
-                df_disp["dispatch_date"], errors="coerce"
-            )
-            df_disp["Month-Year"] = df_disp["Temp_DT"].dt.strftime("%B %Y")
+            df_disp["Month-Year"] = pd.to_datetime(
+                df_disp["dispatch_date"]
+            ).dt.strftime("%B %Y")
         f_disp = df_disp.copy()
         if not f_disp.empty:
             if selected_month != "All":
@@ -264,11 +237,12 @@ if menu == "Month-wise Summary Dashboard":
 
         st.divider()
         st.subheader("Raw Material Overview Table")
-        cols_to_drop = [
-            c for c in ["Month-Year", "Temp_DT"] if c in f_rm.columns
-        ]
-        display_f_rm = format_df_dates(f_rm.drop(columns=cols_to_drop))
-        st.dataframe(display_f_rm, use_container_width=True)
+        st.dataframe(
+            f_rm.drop(columns=["Month-Year"])
+            if "Month-Year" in f_rm.columns
+            else f_rm,
+            use_container_width=True,
+        )
 
 elif menu == "1. Raw Material Received":
     st.header("Raw Material Received Entry")
@@ -276,8 +250,7 @@ elif menu == "1. Raw Material Received":
     with st.form("rm_form", clear_on_submit=True):
         c1, c2, c3 = st.columns(3)
         with c1:
-            rm_date_obj = st.date_input("RM Date", datetime.date.today())
-            rm_date = str(rm_date_obj)
+            rm_date = str(st.date_input("RM Date", datetime.date.today()))
             vendor_name = st.text_input("Vendor Name", value="")
             vehicle_no = st.text_input(
                 "Vehicle Number", placeholder="e.g. UP-75-AT-5079"
@@ -345,8 +318,12 @@ elif menu == "1. Raw Material Received":
     st.subheader("Saved Raw Material Entries")
     df_rm_saved = load_data("raw_material")
     if not df_rm_saved.empty:
-        disp_df = format_df_dates(df_rm_saved.drop(columns=["id"]))
-        st.dataframe(disp_df, use_container_width=True)
+        st.dataframe(
+            df_rm_saved.drop(columns=["id"])
+            if "id" in df_rm_saved.columns
+            else df_rm_saved,
+            use_container_width=True,
+        )
 
 elif menu == "2. Milling & Quality Lab Entry":
     st.header("Milling Processing & Quality Lab Entry")
@@ -364,10 +341,9 @@ elif menu == "2. Milling & Quality Lab Entry":
             st.subheader("1. Milling Parameters")
             c1, c2 = st.columns(2)
             with c1:
-                milling_date_obj = st.date_input(
-                    "Milling Date", datetime.date.today()
+                milling_date = str(
+                    st.date_input("Milling Date", datetime.date.today())
                 )
-                milling_date = str(milling_date_obj)
                 milling_qty = st.number_input(
                     "Milling Quantity (kg)", min_value=0.0, value=0.0, step=10.0
                 )
@@ -381,10 +357,9 @@ elif menu == "2. Milling & Quality Lab Entry":
             st.subheader("2. Quality Lab Parameters")
             qc1, qc2, qc3 = st.columns(3)
             with qc1:
-                q_date_obj = st.date_input(
-                    "Lab Test Date", datetime.date.today()
+                q_date = str(
+                    st.date_input("Lab Test Date", datetime.date.today())
                 )
-                q_date = str(q_date_obj)
                 moisture_milled = st.number_input(
                     "Moisture % (Milled)",
                     min_value=0.0,
@@ -453,12 +428,15 @@ elif menu == "2. Milling & Quality Lab Entry":
                 st.rerun()
 
     with tab_update_old:
-        st.subheader("Update Quality for Old Milling Batches")
+        st.subheader(
+            "Purane Milling Batches Jinme Quality Data Nahi Hai, Unko Update"
+            " Karein"
+        )
         df_mil = load_data("milling")
         df_q = load_data("quality")
 
         if df_mil.empty:
-            st.info("No milling records found.")
+            st.info("Koi milling record nahi mila.")
         else:
             tested_ids = (
                 df_q["milling_id"].tolist()
@@ -469,49 +447,37 @@ elif menu == "2. Milling & Quality Lab Entry":
 
             if untested_mil.empty:
                 st.success(
-                    "Quality data has already been entered for all milling"
-                    " batches!"
+                    "Sabhi purane milling batches ki quality entry pehle se ho"
+                    " chuki hai!"
                 )
             else:
-                untested_mil["formatted_date"] = pd.to_datetime(
-                    untested_mil["milling_date"], errors="coerce"
-                ).dt.strftime("%d %b %Y")
-                available_dates_formatted = sorted(
-                    untested_mil["formatted_date"].dropna().unique()
+                untested_mil["label"] = (
+                    "Batch ID: "
+                    + untested_mil["id"].astype(str)
+                    + " | Miller: "
+                    + untested_mil["miller_name"]
+                    + " | Date: "
+                    + untested_mil["milling_date"]
+                    + " | Qty: "
+                    + untested_mil["milling_qty"].astype(str)
+                    + " kg"
                 )
-
-                selected_milling_date_fmt = st.selectbox(
-                    "Select Milling Date", available_dates_formatted
+                sel_batch = st.selectbox(
+                    "Select Untested Milling Batch", untested_mil["label"].tolist()
                 )
-
-                selected_milling_date = pd.to_datetime(
-                    selected_milling_date_fmt, format="%d %b %Y"
-                ).strftime("%Y-%m-%d")
-
-                date_matched_batches = untested_mil[
-                    untested_mil["milling_date"] == selected_milling_date
-                ]
-
-                miller_options = date_matched_batches[
-                    "miller_name"
-                ].tolist()
-                selected_miller_name = st.selectbox(
-                    "Select Miller Name", miller_options
-                )
-
-                selected_batch_row = date_matched_batches[
-                    date_matched_batches["miller_name"] == selected_miller_name
+                sel_row = untested_mil[
+                    untested_mil["label"] == sel_batch
                 ].iloc[0]
-                target_m_id = int(selected_batch_row["id"])
-                batch_qty = selected_batch_row["milling_qty"]
-
-                st.info(
-                    f"Selected Batch ID: **{target_m_id}** | Milling Qty:"
-                    f" **{batch_qty} kg**"
-                )
+                target_m_id = int(sel_row["id"])
+                t_miller = sel_row["miller_name"]
 
                 with st.form("update_old_q_form"):
-                    st.write("Enter Quality Parameters:")
+                    st.write(
+                        f"Updating Quality for Batch ID: {target_m_id} ({t_miller})"
+                    )
+                    oq_date = str(
+                        st.date_input("Lab Test Date", datetime.date.today())
+                    )
                     omoisture = st.number_input(
                         "Moisture % (Milled)",
                         min_value=0.0,
@@ -533,7 +499,7 @@ elif menu == "2. Milling & Quality Lab Entry":
                     )
 
                     submit_old_q = st.form_submit_button(
-                        "Save Quality for this Batch"
+                        "Save Quality for this Old Batch"
                     )
                     if submit_old_q:
                         conn = get_connection()
@@ -545,8 +511,8 @@ elif menu == "2. Milling & Quality Lab Entry":
                         """,
                             (
                                 target_m_id,
-                                selected_milling_date,
-                                selected_miller_name,
+                                oq_date,
+                                t_miller,
                                 omoisture,
                                 ogranulation,
                                 occl4,
@@ -567,7 +533,7 @@ elif menu == "2. Milling & Quality Lab Entry":
     st.subheader("Saved Milling Records")
     df_mil_saved = load_data("milling")
     if not df_mil_saved.empty:
-        st.dataframe(format_df_dates(df_mil_saved), use_container_width=True)
+        st.dataframe(df_mil_saved, use_container_width=True)
 
 elif menu == "3. Finished Goods & Yield":
     st.header(
@@ -579,7 +545,8 @@ elif menu == "3. Finished Goods & Yield":
 
     if df_mil.empty:
         st.warning(
-            "Please make an entry in '2. Milling & Quality Lab Entry' first."
+            "Pehle '2. Milling & Quality Lab Entry' mein entry karein, tabhi"
+            " Finished Goods bhar paayenge."
         )
     else:
         completed_fg_ids = (
@@ -591,20 +558,17 @@ elif menu == "3. Finished Goods & Yield":
 
         if pending_mil.empty:
             st.success(
-                "Finished Goods entries have been completed for all milling"
-                " batches!"
+                "Sabhi Milling batches ke liye Finished Goods entries ho"
+                " chuki hain!"
             )
         else:
-            pending_mil["formatted_date"] = pd.to_datetime(
-                pending_mil["milling_date"], errors="coerce"
-            ).dt.strftime("%d %b %Y")
             pending_mil["batch_label"] = (
                 "Batch ID: "
                 + pending_mil["id"].astype(str)
                 + " | Miller: "
                 + pending_mil["miller_name"]
                 + " | Date: "
-                + pending_mil["formatted_date"]
+                + pending_mil["milling_date"]
                 + " | Qty: "
                 + pending_mil["milling_qty"].astype(str)
                 + " kg"
@@ -621,24 +585,22 @@ elif menu == "3. Finished Goods & Yield":
             selected_milling_id = int(selected_row["id"])
             miller_name = selected_row["miller_name"]
             milling_date = selected_row["milling_date"]
-            formatted_milling_date = pd.to_datetime(
-                milling_date, errors="coerce"
-            ).strftime("%d %b %Y")
             input_milling_qty = float(selected_row["milling_qty"])
 
             st.info(
-                f"You are filling Finished Goods for **{miller_name}** on"
-                f" **{formatted_milling_date}** (Batch ID: {selected_milling_id}"
-                f" | Milling Qty: {input_milling_qty} kg)."
+                f"Aap **{miller_name}** ke **{milling_date}** wale milling"
+                f" batch (ID: {selected_milling_id}) ke liye Finished Goods"
+                f" bhar rahe hain (Milling Qty: {input_milling_qty} kg)."
             )
 
             with st.form("fg_form", clear_on_submit=True):
                 c1, c2, c3 = st.columns(3)
                 with c1:
-                    prod_date_obj = st.date_input(
-                        "Production Date", datetime.date.today()
+                    production_date = str(
+                        st.date_input(
+                            "Production Date", datetime.date.today()
+                        )
                     )
-                    production_date = str(prod_date_obj)
                     mfd_date = st.text_input(
                         "MFD Date Text", placeholder="e.g. Aug 2026"
                     )
@@ -747,8 +709,12 @@ elif menu == "3. Finished Goods & Yield":
 
     st.subheader("Saved Finished Goods Records")
     if not df_fg_saved.empty:
-        disp_df = format_df_dates(df_fg_saved.drop(columns=["id"]))
-        st.dataframe(disp_df, use_container_width=True)
+        st.dataframe(
+            df_fg_saved.drop(columns=["id"])
+            if "id" in df_fg_saved.columns
+            else df_fg_saved,
+            use_container_width=True,
+        )
 
 elif menu == "4. Better Nutrition Packing Material":
     st.header("Better Nutrition Packing Material Dispatch Entry")
@@ -756,8 +722,7 @@ elif menu == "4. Better Nutrition Packing Material":
     with st.form("pm_form", clear_on_submit=True):
         c1, c2, c3 = st.columns(3)
         with c1:
-            pm_date_obj = st.date_input("Entry Date", datetime.date.today())
-            pm_date = str(pm_date_obj)
+            pm_date = str(st.date_input("Entry Date", datetime.date.today()))
             carton_type = st.selectbox(
                 "Carton Type", ["Standard 10kg", "Standard 20kg", "Custom"]
             )
@@ -810,8 +775,12 @@ elif menu == "4. Better Nutrition Packing Material":
     st.subheader("Saved Packing Material Dispatches")
     df_pm_saved = load_data("packing_material")
     if not df_pm_saved.empty:
-        disp_df = format_df_dates(df_pm_saved.drop(columns=["id"]))
-        st.dataframe(disp_df, use_container_width=True)
+        st.dataframe(
+            df_pm_saved.drop(columns=["id"])
+            if "id" in df_pm_saved.columns
+            else df_pm_saved,
+            use_container_width=True,
+        )
 
 elif menu == "5. Daily Dispatch Entry":
     st.header("Daily Finished Goods Dispatch Entry")
@@ -819,10 +788,9 @@ elif menu == "5. Daily Dispatch Entry":
     with st.form("dispatch_form", clear_on_submit=True):
         c1, c2, c3 = st.columns(3)
         with c1:
-            disp_date_obj = st.date_input(
-                "Dispatch Date", datetime.date.today()
+            dispatch_date = str(
+                st.date_input("Dispatch Date", datetime.date.today())
             )
-            dispatch_date = str(disp_date_obj)
             vehicle_no = st.text_input("Vehicle Number", value="")
         with c2:
             disp_500g = st.number_input(
@@ -881,18 +849,23 @@ elif menu == "5. Daily Dispatch Entry":
     st.subheader("Saved Dispatch Records")
     df_disp_saved = load_data("dispatch")
     if not df_disp_saved.empty:
-        disp_df = format_df_dates(df_disp_saved.drop(columns=["id"]))
-        st.dataframe(disp_df, use_container_width=True)
+        st.dataframe(
+            df_disp_saved.drop(columns=["id"])
+            if "id" in df_disp_saved.columns
+            else df_disp_saved,
+            use_container_width=True,
+        )
 
 elif menu == "6. Master Records & Export (Admin Controls)":
     st.header("Master Records, Delete/Edit & Data Export Center")
     if user_role != "Admin":
         st.error(
-            "Access Denied! This section is only for Admin (Rishabh@1994)."
+            "Access Denied! Ye section sirf Admin (Rishabh@1994) ke liye hai."
         )
     else:
         st.success(
-            "Welcome Admin! You can view, delete records or export data here."
+            "Welcome Admin! Aap yahan kisi bhi table ka record delete kar"
+            " sakte hain ya data export kar sakte hain."
         )
         tables = [
             "raw_material",
@@ -907,7 +880,7 @@ elif menu == "6. Master Records & Export (Admin Controls)":
         )
         df_master = load_data(selected_table)
         st.write(f"Showing records for table: **{selected_table}**")
-        st.dataframe(format_df_dates(df_master), use_container_width=True)
+        st.dataframe(df_master, use_container_width=True)
 
         if not df_master.empty and "id" in df_master.columns:
             st.divider()
