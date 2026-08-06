@@ -125,7 +125,7 @@ def load_data(table_name):
 
 
 def format_df_dates(df):
-    """Helper to format date columns in dataframe to dd mmm yyyy across all sections"""
+    """Universal helper to format all known date columns in any dataframe to dd mmm yyyy"""
     if df.empty:
         return df
     date_cols = [
@@ -474,10 +474,10 @@ elif menu == "2. Milling & Quality Lab Entry":
                 )
             else:
                 untested_mil["formatted_date"] = pd.to_datetime(
-                    untested_mil["milling_date"]
+                    untested_mil["milling_date"], errors="coerce"
                 ).dt.strftime("%d %b %Y")
                 available_dates_formatted = sorted(
-                    untested_mil["formatted_date"].unique()
+                    untested_mil["formatted_date"].dropna().unique()
                 )
 
                 selected_milling_date_fmt = st.selectbox(
@@ -596,7 +596,7 @@ elif menu == "3. Finished Goods & Yield":
             )
         else:
             pending_mil["formatted_date"] = pd.to_datetime(
-                pending_mil["milling_date"]
+                pending_mil["milling_date"], errors="coerce"
             ).dt.strftime("%d %b %Y")
             pending_mil["batch_label"] = (
                 "Batch ID: "
@@ -621,9 +621,9 @@ elif menu == "3. Finished Goods & Yield":
             selected_milling_id = int(selected_row["id"])
             miller_name = selected_row["miller_name"]
             milling_date = selected_row["milling_date"]
-            formatted_milling_date = pd.to_datetime(milling_date).strftime(
-                "%d %b %Y"
-            )
+            formatted_milling_date = pd.to_datetime(
+                milling_date, errors="coerce"
+            ).strftime("%d %b %Y")
             input_milling_qty = float(selected_row["milling_qty"])
 
             st.info(
