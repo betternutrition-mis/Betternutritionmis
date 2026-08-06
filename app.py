@@ -140,15 +140,31 @@ menu = st.sidebar.selectbox(
 )
 
 
-def get_miller_input(unique_key):
+def get_miller_input(unique_key, default_val=None):
     st.write("### Select Miller Details")
+    idx = 0
+    if default_val and default_val in BASE_MILLER_LIST:
+        idx = BASE_MILLER_LIST.index(default_val)
+    elif default_val and default_val not in BASE_MILLER_LIST:
+        idx = len(BASE_MILLER_LIST) - 1  # Other
+
     selected_option = st.selectbox(
-        "Miller Name", BASE_MILLER_LIST, key=f"ms_{unique_key}"
+        "Miller Name",
+        BASE_MILLER_LIST,
+        index=idx,
+        key=f"ms_{unique_key}",
     )
     final_miller_name = selected_option
     if selected_option == "Other":
+        custom_input_val = (
+            default_val
+            if default_val and default_val not in BASE_MILLER_LIST
+            else ""
+        )
         custom_name = st.text_input(
-            "Enter New Miller Name Here", key=f"cs_{unique_key}"
+            "Enter New Miller Name Here",
+            value=custom_input_val,
+            key=f"cs_{unique_key}",
         )
         if custom_name:
             final_miller_name = custom_name
@@ -166,7 +182,8 @@ if menu == "Month-wise Summary Dashboard":
         df_rm["Parsed_Date"] = pd.to_datetime(df_rm["rm_date"], errors="coerce")
         df_rm["Month-Year"] = df_rm["Parsed_Date"].dt.strftime("%B %Y")
         selected_month = st.selectbox(
-            "Filter by Month-Year", ["All"] + list(df_rm["Month-Year"].dropna().unique())
+            "Filter by Month-Year",
+            ["All"] + list(df_rm["Month-Year"].dropna().unique()),
         )
         unique_millers = list(df_rm["miller_name"].unique())
         selected_miller = st.selectbox(
@@ -182,7 +199,9 @@ if menu == "Month-wise Summary Dashboard":
 
         df_mil = load_data("milling")
         if not df_mil.empty:
-            df_mil["Parsed_Date"] = pd.to_datetime(df_mil["milling_date"], errors="coerce")
+            df_mil["Parsed_Date"] = pd.to_datetime(
+                df_mil["milling_date"], errors="coerce"
+            )
             df_mil["Month-Year"] = df_mil["Parsed_Date"].dt.strftime("%B %Y")
         f_mil = df_mil.copy()
         if not f_mil.empty:
@@ -196,7 +215,9 @@ if menu == "Month-wise Summary Dashboard":
 
         df_fg = load_data("finished_goods")
         if not df_fg.empty:
-            df_fg["Parsed_Date"] = pd.to_datetime(df_fg["production_date"], errors="coerce")
+            df_fg["Parsed_Date"] = pd.to_datetime(
+                df_fg["production_date"], errors="coerce"
+            )
             df_fg["Month-Year"] = df_fg["Parsed_Date"].dt.strftime("%B %Y")
         f_fg = df_fg.copy()
         if not f_fg.empty:
@@ -210,7 +231,9 @@ if menu == "Month-wise Summary Dashboard":
 
         df_disp = load_data("dispatch")
         if not df_disp.empty:
-            df_disp["Parsed_Date"] = pd.to_datetime(df_disp["dispatch_date"], errors="coerce")
+            df_disp["Parsed_Date"] = pd.to_datetime(
+                df_disp["dispatch_date"], errors="coerce"
+            )
             df_disp["Month-Year"] = df_disp["Parsed_Date"].dt.strftime("%B %Y")
         f_disp = df_disp.copy()
         if not f_disp.empty:
@@ -237,7 +260,9 @@ if menu == "Month-wise Summary Dashboard":
 
         st.divider()
         st.subheader("Raw Material Overview Table")
-        cols_to_drop = [c for c in ["Month-Year", "Parsed_Date"] if c in f_rm.columns]
+        cols_to_drop = [
+            c for c in ["Month-Year", "Parsed_Date"] if c in f_rm.columns
+        ]
         st.dataframe(
             f_rm.drop(columns=cols_to_drop),
             use_container_width=True,
@@ -245,85 +270,216 @@ if menu == "Month-wise Summary Dashboard":
 
 elif menu == "1. Raw Material Received":
     st.header("Raw Material Received Entry")
-    miller_name = get_miller_input("rm")
-    with st.form("rm_form", clear_on_submit=True):
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            raw_date_obj = st.date_input("RM Date", datetime.date.today())
-            rm_date = raw_date_obj.strftime("%d %b %Y")
-            vendor_name = st.text_input("Vendor Name", value="")
-            vehicle_no = st.text_input(
-                "Vehicle Number", placeholder="e.g. UP-75-AT-5079"
-            )
-        with c2:
-            hecto_wt = st.number_input(
-                "Hectoliter Weight", min_value=0.0, value=0.0, step=0.1
-            )
-            moisture_rm = st.number_input(
-                "Moisture % (RM)", min_value=0.0, value=0.0, step=0.1
-            )
-            broken_pct = st.number_input(
-                "Broken %", min_value=0.0, value=0.0, step=0.1
-            )
-        with c3:
-            infestation = st.selectbox(
-                "Infestation", ["Nil", "Low", "Medium", "High"]
-            )
-            jute_bags = st.number_input(
-                "Number of Jute Bags (650g fix)",
-                min_value=0,
-                value=0,
-                step=1,
-            )
-            gross_qty = st.number_input(
-                "Gross Qty (kg)", min_value=0.0, value=0.0, step=10.0
-            )
-        remarks = st.text_input("Remarks", value="")
-        submit_rm = st.form_submit_button(
-            label="Save Raw Material & Reset Form"
+
+    if "edit_rm_id" not in st.session_state:
+        st.session_state["edit_rm_id"] = None
+
+    df_rm_saved = load_data("raw_material")
+
+    # Edit/Delete Mode selection if records exist
+    if not df_rm_saved.empty:
+        action_type = st.radio(
+            "Action Mode", ["➕ New Entry", "✏️ Edit / 🗑️ Delete Existing Entry"], horizontal=True
         )
-        if submit_rm:
-            jute_wt = jute_bags * 0.650
-            net_wt = gross_qty - jute_wt
-            conn = get_connection()
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                INSERT INTO raw_material (rm_date, miller_name, vendor_name, vehicle_number, hectoliter_weight, moisture_rm, broken_pct, infestation, jute_bags, gross_qty, jute_weight, net_weight, remarks)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-                (
-                    rm_date,
-                    miller_name,
-                    vendor_name,
-                    vehicle_no,
-                    hecto_wt,
-                    moisture_rm,
-                    broken_pct,
-                    infestation,
-                    jute_bags,
-                    gross_qty,
-                    round(jute_wt, 2),
-                    round(net_wt, 2),
-                    remarks,
-                ),
+    else:
+        action_type = "➕ New Entry"
+
+    edit_data = None
+    if action_type == "✏️ Edit / 🗑️ Delete Existing Entry" and not df_rm_saved.empty:
+        df_rm_saved["label"] = (
+            "ID: "
+            + df_rm_saved["id"].astype(str)
+            + " | Date: "
+            + df_rm_saved["rm_date"]
+            + " | Miller: "
+            + df_rm_saved["miller_name"]
+            + " | Net Wt: "
+            + df_rm_saved["net_weight"].astype(str)
+            + " kg"
+        )
+        selected_row_label = st.selectbox(
+            "Select Raw Material Record to Modify/Delete", df_rm_saved["label"].tolist()
+        )
+        selected_row = df_rm_saved[df_rm_saved["label"] == selected_row_label].iloc[0]
+        st.session_state["edit_rm_id"] = int(selected_row["id"])
+        edit_data = selected_row
+
+        col_del1, col_del2 = st.columns([1, 4])
+        with col_del1:
+            if st.button("🗑️ Delete Selected Record", type="primary"):
+                conn = get_connection()
+                cursor = conn.cursor()
+                cursor.execute(
+                    "DELETE FROM raw_material WHERE id = ?", (st.session_state["edit_rm_id"],)
+                )
+                conn.commit()
+                conn.close()
+                st.success(f"Record ID {st.session_state['edit_rm_id']} successfully deleted!")
+                st.session_state["edit_rm_id"] = None
+                st.rerun()
+    else:
+        st.session_state["edit_rm_id"] = None
+
+    if action_type == "➕ New Entry" or st.session_state["edit_rm_id"] is not None:
+        default_miller = edit_data["miller_name"] if edit_data is not None else None
+        miller_name = get_miller_input("rm", default_miller)
+
+        with st.form("rm_form", clear_on_submit=False):
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                default_date = datetime.date.today()
+                if edit_data is not None:
+                    try:
+                        default_date = datetime.datetime.strptime(
+                            edit_data["rm_date"], "%d %b %Y"
+                        ).date()
+                    except Exception:
+                        pass
+                raw_date_obj = st.date_input("RM Date", value=default_date)
+                rm_date = raw_date_obj.strftime("%d %b %Y")
+
+                default_vendor = (
+                    edit_data["vendor_name"] if edit_data is not None else ""
+                )
+                vendor_name = st.text_input("Vendor Name", value=default_vendor)
+
+                default_veh = (
+                    edit_data["vehicle_number"] if edit_data is not None else ""
+                )
+                vehicle_no = st.text_input(
+                    "Vehicle Number", value=default_veh, placeholder="e.g. UP-75-AT-5079"
+                )
+            with c2:
+                default_hecto = (
+                    float(edit_data["hectoliter_weight"])
+                    if edit_data is not None
+                    else 0.0
+                )
+                hecto_wt = st.number_input(
+                    "Hectoliter Weight", min_value=0.0, value=default_hecto, step=0.1
+                )
+
+                default_mois = (
+                    float(edit_data["moisture_rm"])
+                    if edit_data is not None
+                    else 0.0
+                )
+                moisture_rm = st.number_input(
+                    "Moisture % (RM)", min_value=0.0, value=default_mois, step=0.1
+                )
+
+                default_broken = (
+                    float(edit_data["broken_pct"])
+                    if edit_data is not None
+                    else 0.0
+                )
+                broken_pct = st.number_input(
+                    "Broken %", min_value=0.0, value=default_broken, step=0.1
+                )
+            with c3:
+                infestation_opts = ["Nil", "Low", "Medium", "High"]
+                default_inf_idx = 0
+                if edit_data is not None and edit_data["infestation"] in infestation_opts:
+                    default_inf_idx = infestation_opts.index(edit_data["infestation"])
+                infestation = st.selectbox(
+                    "Infestation", infestation_opts, index=default_inf_idx
+                )
+
+                default_bags = (
+                    int(edit_data["jute_bags"]) if edit_data is not None else 0
+                )
+                jute_bags = st.number_input(
+                    "Number of Jute Bags (650g fix)",
+                    min_value=0,
+                    value=default_bags,
+                    step=1,
+                )
+
+                default_gross = (
+                    float(edit_data["gross_qty"]) if edit_data is not None else 0.0
+                )
+                gross_qty = st.number_input(
+                    "Gross Qty (kg)", min_value=0.0, value=default_gross, step=10.0
+                )
+
+            default_rem = edit_data["remarks"] if edit_data is not None else ""
+            remarks = st.text_input("Remarks", value=default_rem)
+
+            btn_label = (
+                "Update Raw Material Record"
+                if st.session_state["edit_rm_id"] is not None
+                else "Save Raw Material Entry"
             )
-            conn.commit()
-            conn.close()
-            st.success(
-                f"RM Saved & Permanently Stored for {miller_name}! Net Weight:"
-                f" {net_wt:,.2f} kg"
-            )
+            submit_rm = st.form_submit_button(label=btn_label)
+
+            if submit_rm:
+                jute_wt = jute_bags * 0.650
+                net_wt = gross_qty - jute_wt
+                conn = get_connection()
+                cursor = conn.cursor()
+
+                if st.session_state["edit_rm_id"] is not None:
+                    cursor.execute(
+                        """
+                        UPDATE raw_material 
+                        SET rm_date=?, miller_name=?, vendor_name=?, vehicle_number=?, hectoliter_weight=?, moisture_rm=?, broken_pct=?, infestation=?, jute_bags=?, gross_qty=?, jute_weight=?, net_weight=?, remarks=?
+                        WHERE id=?
+                    """,
+                        (
+                            rm_date,
+                            miller_name,
+                            vendor_name,
+                            vehicle_no,
+                            hecto_wt,
+                            moisture_rm,
+                            broken_pct,
+                            infestation,
+                            jute_bags,
+                            gross_qty,
+                            round(jute_wt, 2),
+                            round(net_wt, 2),
+                            remarks,
+                            st.session_state["edit_rm_id"],
+                        ),
+                    )
+                    conn.commit()
+                    conn.close()
+                    st.success(f"Raw Material Record ID {st.session_state['edit_rm_id']} Updated Successfully!")
+                    st.session_state["edit_rm_id"] = None
+                    st.rerun()
+                else:
+                    cursor.execute(
+                        """
+                        INSERT INTO raw_material (rm_date, miller_name, vendor_name, vehicle_number, hectoliter_weight, moisture_rm, broken_pct, infestation, jute_bags, gross_qty, jute_weight, net_weight, remarks)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                        (
+                            rm_date,
+                            miller_name,
+                            vendor_name,
+                            vehicle_no,
+                            hecto_wt,
+                            moisture_rm,
+                            broken_pct,
+                            infestation,
+                            jute_bags,
+                            gross_qty,
+                            round(jute_wt, 2),
+                            round(net_wt, 2),
+                            remarks,
+                        ),
+                    )
+                    conn.commit()
+                    conn.close()
+                    st.success(
+                        f"RM Saved & Permanently Stored for {miller_name}! Net Weight:"
+                        f" {net_wt:,.2f} kg"
+                    )
 
     st.subheader("Saved Raw Material Entries")
-    df_rm_saved = load_data("raw_material")
-    if not df_rm_saved.empty:
-        st.dataframe(
-            df_rm_saved.drop(columns=["id"])
-            if "id" in df_rm_saved.columns
-            else df_rm_saved,
-            use_container_width=True,
-        )
+    df_rm_saved_display = load_data("raw_material")
+    if not df_rm_saved_display.empty:
+        st.dataframe(df_rm_saved_display, use_container_width=True)
 
 elif menu == "2. Milling & Quality Lab Entry":
     st.header("Milling Processing & Quality Lab Entry")
@@ -527,32 +683,46 @@ elif menu == "2. Milling & Quality Lab Entry":
                         )
                         st.rerun()
 
-    st.subheader("Saved Milling Records")
+    st.subheader("Saved Milling Records & Deletion Controls")
     df_mil_saved = load_data("milling")
     if not df_mil_saved.empty:
-        st.dataframe(
-            df_mil_saved.drop(columns=["id"])
-            if "id" in df_mil_saved.columns
-            else df_mil_saved,
-            use_container_width=True,
-        )
+        st.dataframe(df_mil_saved, use_container_width=True)
+        
+        # Row deletion for Milling
+        del_mil_id = st.selectbox("Select Milling ID to Delete", [None] + df_mil_saved["id"].tolist(), key="del_mil")
+        if del_mil_id is not None:
+            if st.button("🗑️ Delete Selected Milling Record", key="btn_del_mil"):
+                conn = get_connection()
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM milling WHERE id = ?", (del_mil_id,))
+                cursor.execute("DELETE FROM quality WHERE milling_id = ?", (del_mil_id,))
+                conn.commit()
+                conn.close()
+                st.success(f"Milling ID {del_mil_id} deleted successfully!")
+                st.rerun()
 
     st.subheader("Saved Quality Lab Records")
     df_q_saved = load_data("quality")
     if not df_q_saved.empty:
-        st.dataframe(
-            df_q_saved.drop(columns=["id", "milling_id"])
-            if "id" in df_q_saved.columns
-            else df_q_saved,
-            use_container_width=True,
-        )
+        st.dataframe(df_q_saved, use_container_width=True)
+        
+        del_q_id = st.selectbox("Select Quality Record ID to Delete", [None] + df_q_saved["id"].tolist(), key="del_q")
+        if del_q_id is not None:
+            if st.button("🗑️ Delete Selected Quality Record", key="btn_del_q"):
+                conn = get_connection()
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM quality WHERE id = ?", (del_q_id,))
+                conn.commit()
+                conn.close()
+                st.success(f"Quality Record ID {del_q_id} deleted successfully!")
+                st.rerun()
 
 elif menu == "3. Finished Goods & Yield":
     st.header("Finished Goods Production & Yield Tracking")
     df_mil = load_data("milling")
     if df_mil.empty:
         st.warning(
-            "Pehle Menu 2 se Milling entry karein, tabhi Finished Goods entry"
+            "Pehle Menu 2 से Milling entry karein, tabhi Finished Goods entry"
             " ho sakegi."
         )
     else:
@@ -690,12 +860,18 @@ elif menu == "3. Finished Goods & Yield":
     st.subheader("Saved Finished Goods Records")
     df_fg_saved = load_data("finished_goods")
     if not df_fg_saved.empty:
-        st.dataframe(
-            df_fg_saved.drop(columns=["id", "milling_id"])
-            if "id" in df_fg_saved.columns
-            else df_fg_saved,
-            use_container_width=True,
-        )
+        st.dataframe(df_fg_saved, use_container_width=True)
+        
+        del_fg_id = st.selectbox("Select Finished Goods ID to Delete", [None] + df_fg_saved["id"].tolist(), key="del_fg")
+        if del_fg_id is not None:
+            if st.button("🗑️ Delete Selected Finished Goods Record", key="btn_del_fg"):
+                conn = get_connection()
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM finished_goods WHERE id = ?", (del_fg_id,))
+                conn.commit()
+                conn.close()
+                st.success(f"Finished Goods ID {del_fg_id} deleted successfully!")
+                st.rerun()
 
 elif menu == "4. Better Nutrition Packing Material":
     st.header("Better Nutrition Packing Material Dispatch/Stock Entry")
@@ -757,12 +933,18 @@ elif menu == "4. Better Nutrition Packing Material":
     st.subheader("Saved Packing Material Records")
     df_pm_saved = load_data("packing_material")
     if not df_pm_saved.empty:
-        st.dataframe(
-            df_pm_saved.drop(columns=["id"])
-            if "id" in df_pm_saved.columns
-            else df_pm_saved,
-            use_container_width=True,
-        )
+        st.dataframe(df_pm_saved, use_container_width=True)
+        
+        del_pm_id = st.selectbox("Select Packing Material ID to Delete", [None] + df_pm_saved["id"].tolist(), key="del_pm")
+        if del_pm_id is not None:
+            if st.button("🗑️ Delete Selected Packing Material Record", key="btn_del_pm"):
+                conn = get_connection()
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM packing_material WHERE id = ?", (del_pm_id,))
+                conn.commit()
+                conn.close()
+                st.success(f"Packing Material Record ID {del_pm_id} deleted successfully!")
+                st.rerun()
 
 elif menu == "5. Daily Dispatch Entry":
     st.header("Daily Finished Goods Dispatch Entry")
@@ -833,12 +1015,18 @@ elif menu == "5. Daily Dispatch Entry":
     st.subheader("Saved Dispatch Records")
     df_disp_saved = load_data("dispatch")
     if not df_disp_saved.empty:
-        st.dataframe(
-            df_disp_saved.drop(columns=["id"])
-            if "id" in df_disp_saved.columns
-            else df_disp_saved,
-            use_container_width=True,
-        )
+        st.dataframe(df_disp_saved, use_container_width=True)
+        
+        del_disp_id = st.selectbox("Select Dispatch ID to Delete", [None] + df_disp_saved["id"].tolist(), key="del_disp")
+        if del_disp_id is not None:
+            if st.button("🗑️ Delete Selected Dispatch Record", key="btn_del_disp"):
+                conn = get_connection()
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM dispatch WHERE id = ?", (del_disp_id,))
+                conn.commit()
+                conn.close()
+                st.success(f"Dispatch ID {del_disp_id} deleted successfully!")
+                st.rerun()
 
 elif menu == "6. Master Records & Export (Admin Controls)":
     st.header("Master Records, Data Management & Admin Controls")
@@ -881,16 +1069,3 @@ elif menu == "6. Master Records & Export (Admin Controls)":
                 file_name=f"{table_to_manage}_export.csv",
                 mime="text/csv",
             )
-
-        st.divider()
-        st.subheader("Danger Zone / Database Maintenance")
-        if st.button("🗑️ Delete Database File (Reset Everything)"):
-            if os.path.exists("flour_mill_erp.db"):
-                os.remove("flour_mill_erp.db")
-                st.warning(
-                    "Database file delete ho chuki hai. App ko refresh karein"
-                    " naye tables banane ke liye."
-                )
-                st.rerun()
-            else:
-                st.error("Database file nahi mili.")
