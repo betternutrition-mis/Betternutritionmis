@@ -3,14 +3,12 @@ import sqlite3
 import pandas as pd
 import streamlit as st
 
-# Page Configuration & Theme Header
 st.set_page_config(
-    page_title="Better Nutrition & Flour Mill ERP", page_icon="🌾", layout="wide"
+    page_title="Better Nutrition & Flour Mill ERP", layout="wide"
 )
 
-# --- CUSTOM BRANDING HEADER ---
 st.markdown(
-    "<h1 style='text-align: center; color: #2E7D32;'>🏢 BETTER NUTRITION & FLOUR"
+    "<h1 style='text-align: center; color: #2E7D32;'>BETTER NUTRITION & FLOUR"
     " MILL ERP</h1>",
     unsafe_allow_html=True,
 )
@@ -22,17 +20,14 @@ st.markdown(
 st.divider()
 
 
-# --- ROLE-BASED PASSWORD PROTECTION SYSTEM ---
 def check_password():
-    """Returns True if the user enters a valid password and sets their role."""
-
     def password_entered():
         entered_pwd = st.session_state["password"]
-        if entered_pwd == "Rishabh@1994":  # Admin Password
+        if entered_pwd == "Rishabh@1994":
             st.session_state["password_correct"] = True
             st.session_state["role"] = "Admin"
             del st.session_state["password"]
-        elif entered_pwd == "team123":  # Team Password
+        elif entered_pwd == "team123":
             st.session_state["password_correct"] = True
             st.session_state["role"] = "Team"
             del st.session_state["password"]
@@ -41,7 +36,7 @@ def check_password():
 
     if "password_correct" not in st.session_state:
         st.text_input(
-            "🔒 Password daliye app kholne ke liye:",
+            "Password daliye app kholne ke liye:",
             type="password",
             on_change=password_entered,
             key="password",
@@ -49,12 +44,12 @@ def check_password():
         return False
     elif not st.session_state["password_correct"]:
         st.text_input(
-            "🔒 Password daliye app kholne ke liye:",
+            "Password daliye app kholne ke liye:",
             type="password",
             on_change=password_entered,
             key="password",
         )
-        st.error("😕 Password galat hai. Dobara koshish karein.")
+        st.error("Password galat hai. Dobara koshish karein.")
         return False
     else:
         return True
@@ -64,9 +59,8 @@ if not check_password():
     st.stop()
 
 user_role = st.session_state.get("role", "Team")
-st.sidebar.write(f"👤 Logged in as: **{user_role}**")
+st.sidebar.write(f"Logged in as: **{user_role}**")
 
-# Predefined Miller List with 'Other' Option
 BASE_MILLER_LIST = [
     "Shree Balram Agro",
     "IKON ORG.",
@@ -77,114 +71,43 @@ BASE_MILLER_LIST = [
 ]
 
 
-# --- SQLITE DATABASE CONNECTION & SETUP ---
 def get_connection():
-    conn = sqlite3.connect("flour_mill_erp.db", check_same_thread=False)
-    return conn
+    return sqlite3.connect("flour_mill_erp.db", check_same_thread=False)
 
 
 def init_db():
     conn = get_connection()
     cursor = conn.cursor()
-
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS raw_material (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            rm_date TEXT,
-            miller_name TEXT,
-            vendor_name TEXT,
-            vehicle_number TEXT,
-            hectoliter_weight REAL,
-            moisture_rm REAL,
-            broken_pct REAL,
-            infestation TEXT,
-            jute_bags INTEGER,
-            gross_qty REAL,
-            jute_weight REAL,
-            net_weight REAL,
-            remarks TEXT
+            id INTEGER PRIMARY KEY AUTOINCREMENT, rm_date TEXT, miller_name TEXT, vendor_name TEXT, vehicle_number TEXT, hectoliter_weight REAL, moisture_rm REAL, broken_pct REAL, infestation TEXT, jute_bags INTEGER, gross_qty REAL, jute_weight REAL, net_weight REAL, remarks TEXT
         )
     """)
-
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS milling (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            milling_date TEXT,
-            miller_name TEXT,
-            milling_qty REAL,
-            tempering_time TEXT,
-            tempering_water REAL
+            id INTEGER PRIMARY KEY AUTOINCREMENT, milling_date TEXT, miller_name TEXT, milling_qty REAL, tempering_time TEXT, tempering_water REAL
         )
     """)
-
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS quality (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            date TEXT,
-            miller_name TEXT,
-            moisture_milled REAL,
-            granulation TEXT,
-            ccl4 TEXT,
-            ash_aia REAL,
-            alcoholic_acidity REAL,
-            gluten TEXT,
-            chapati_sensory TEXT
+            id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT, miller_name TEXT, moisture_milled REAL, granulation TEXT, ccl4 TEXT, ash_aia REAL, alcoholic_acidity REAL, gluten TEXT, chapati_sensory TEXT
         )
     """)
-
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS finished_goods (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            production_date TEXT,
-            miller_name TEXT,
-            mfd_date TEXT,
-            expiry_date TEXT,
-            mrp REAL,
-            product_code TEXT,
-            pouch_500g INTEGER,
-            pouch_1kg INTEGER,
-            pouch_2kg INTEGER,
-            pouch_5kg INTEGER,
-            total_finished_qty REAL,
-            bran_qty REAL,
-            bran_pct TEXT,
-            refraction_qty REAL,
-            refraction_pct TEXT,
-            yield_pct TEXT,
-            processing_loss_pct TEXT
+            id INTEGER PRIMARY KEY AUTOINCREMENT, production_date TEXT, miller_name TEXT, mfd_date TEXT, expiry_date TEXT, mrp REAL, product_code TEXT, pouch_500g INTEGER, pouch_1kg INTEGER, pouch_2kg INTEGER, pouch_5kg INTEGER, total_finished_qty REAL, bran_qty REAL, bran_pct TEXT, refraction_qty REAL, refraction_pct TEXT, yield_pct TEXT, processing_loss_pct TEXT
         )
     """)
-
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS packing_material (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            date TEXT,
-            miller_name TEXT,
-            carton_type TEXT,
-            cartons_sent INTEGER,
-            tape_sent INTEGER,
-            oxysorb_qty INTEGER,
-            roll_sku TEXT,
-            roll_qty_sent INTEGER
+            id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT, miller_name TEXT, carton_type TEXT, cartons_sent INTEGER, tape_sent INTEGER, oxysorb_qty INTEGER, roll_sku TEXT, roll_qty_sent INTEGER
         )
     """)
-
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS dispatch (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            dispatch_date TEXT,
-            miller_name TEXT,
-            vehicle_no TEXT,
-            disp_500g INTEGER,
-            disp_1kg INTEGER,
-            disp_2kg INTEGER,
-            disp_5kg INTEGER,
-            total_dispatched_wt REAL,
-            cartons_used INTEGER,
-            remarks TEXT
+            id INTEGER PRIMARY KEY AUTOINCREMENT, dispatch_date TEXT, miller_name TEXT, vehicle_no TEXT, disp_500g INTEGER, disp_1kg INTEGER, disp_2kg INTEGER, disp_5kg INTEGER, total_dispatched_wt REAL, cartons_used INTEGER, remarks TEXT
         )
     """)
-
     conn.commit()
     conn.close()
 
@@ -199,18 +122,17 @@ def load_data(table_name):
     return df
 
 
-# --- SIDEBAR NAVIGATION ---
 menu = st.sidebar.selectbox(
     "Navigation Menu",
     [
-        "📊 Month-wise Summary Dashboard",
-        "📥 1. Raw Material Received",
-        "⚙️ 2. Milling & Processing",
-        "🧪 3. Quality Lab Parameters",
-        "📦 4. Finished Goods & Yield",
-        "🏷️ 5. Better Nutrition Packing Material",
-        "🚚 6. Daily Dispatch Entry",
-        "📂 7. Master Records & Export (Admin Controls)",
+        "Month-wise Summary Dashboard",
+        "1. Raw Material Received",
+        "2. Milling & Processing",
+        "3. Quality Lab Parameters",
+        "4. Finished Goods & Yield",
+        "5. Better Nutrition Packing Material",
+        "6. Daily Dispatch Entry",
+        "7. Master Records & Export (Admin Controls)",
     ],
 )
 
@@ -220,7 +142,6 @@ def get_miller_input(unique_key):
     selected_option = st.selectbox(
         "Miller Name", BASE_MILLER_LIST, key=f"ms_{unique_key}"
     )
-
     final_miller_name = selected_option
     if selected_option == "Other":
         custom_name = st.text_input(
@@ -230,14 +151,11 @@ def get_miller_input(unique_key):
             final_miller_name = custom_name
         else:
             final_miller_name = "Other (Pending Name)"
-
     return final_miller_name
 
 
-# --- 1. SUMMARY DASHBOARD ---
-if menu == "📊 Month-wise Summary Dashboard":
-    st.header("📊 Executive Month-wise Summary & Stock Dashboard")
-
+if menu == "Month-wise Summary Dashboard":
+    st.header("Executive Month-wise Summary & Stock Dashboard")
     df_rm = load_data("raw_material")
     if df_rm.empty:
         st.info("Pehle kuch data entries karein tab dashboard show hoga.")
@@ -248,7 +166,6 @@ if menu == "📊 Month-wise Summary Dashboard":
         selected_month = st.selectbox(
             "Filter by Month-Year", ["All"] + list(df_rm["Month-Year"].unique())
         )
-
         unique_millers = list(df_rm["miller_name"].unique())
         selected_miller = st.selectbox(
             "Filter by Miller Name", ["All"] + unique_millers
@@ -262,36 +179,29 @@ if menu == "📊 Month-wise Summary Dashboard":
 
         tot_net_rm = f_rm["net_weight"].sum()
 
-        # Milling Data & Filter
         f_mil = load_data("milling")
-        if not f_mil.empty:
-            if selected_miller != "All":
-                f_mil = f_mil[f_mil["miller_name"] == selected_miller]
+        if not f_mil.empty and selected_miller != "All":
+            f_mil = f_mil[f_mil["miller_name"] == selected_miller]
         tot_milled = (
             f_mil["milling_qty"].sum() if not f_mil.empty else 0.0
         )
 
-        # Finished Goods Data & Filter
         f_fg = load_data("finished_goods")
-        if not f_fg.empty:
-            if selected_miller != "All":
-                f_fg = f_fg[f_fg["miller_name"] == selected_miller]
+        if not f_fg.empty and selected_miller != "All":
+            f_fg = f_fg[f_fg["miller_name"] == selected_miller]
         tot_finished = (
             f_fg["total_finished_qty"].sum() if not f_fg.empty else 0.0
         )
 
-        # Dispatch Data & Filter
         f_disp = load_data("dispatch")
-        if not f_disp.empty:
-            if selected_miller != "All":
-                f_disp = f_disp[f_disp["miller_name"] == selected_miller]
+        if not f_disp.empty and selected_miller != "All":
+            f_disp = f_disp[f_disp["miller_name"] == selected_miller]
         tot_dispatched = (
             f_disp["total_dispatched_wt"].sum()
             if not f_disp.empty
             else 0.0
         )
 
-        # --- SEPARATE CLOSING CALCULATIONS ---
         rm_closing_stock = tot_net_rm - tot_milled
         fg_closing_stock = tot_finished - tot_dispatched
 
@@ -305,16 +215,14 @@ if menu == "📊 Month-wise Summary Dashboard":
 
         st.divider()
         st.subheader("Raw Material Overview Table")
-        display_df = (
-            f_rm.drop(columns=["id"]) if "id" in f_rm.columns else f_rm
+        st.dataframe(
+            f_rm.drop(columns=["id"]) if "id" in f_rm.columns else f_rm,
+            use_container_width=True,
         )
-        st.dataframe(display_df, use_container_width=True)
 
-# --- 2. RAW MATERIAL RECEIVED ---
-elif menu == "📥 1. Raw Material Received":
-    st.header("📥 Raw Material Received Entry")
+elif menu == "1. Raw Material Received":
+    st.header("Raw Material Received Entry")
     miller_name = get_miller_input("rm")
-
     with st.form("rm_form", clear_on_submit=True):
         c1, c2, c3 = st.columns(3)
         with c1:
@@ -346,12 +254,10 @@ elif menu == "📥 1. Raw Material Received":
             gross_qty = st.number_input(
                 "Gross Qty (kg)", min_value=0.0, value=0.0, step=10.0
             )
-
         remarks = st.text_input("Remarks", value="")
         submit_rm = st.form_submit_button(
             label="Save Raw Material & Reset Form"
         )
-
         if submit_rm:
             jute_wt = jute_bags * 0.650
             net_wt = gross_qty - jute_wt
@@ -381,7 +287,7 @@ elif menu == "📥 1. Raw Material Received":
             conn.commit()
             conn.close()
             st.success(
-                f"✅ RM Saved & Permanently Stored for {miller_name}! Net Weight:"
+                f"RM Saved & Permanently Stored for {miller_name}! Net Weight:"
                 f" {net_wt:,.2f} kg"
             )
 
@@ -395,11 +301,9 @@ elif menu == "📥 1. Raw Material Received":
             use_container_width=True,
         )
 
-# --- 3. MILLING & PROCESSING ---
-elif menu == "⚙️ 2. Milling & Processing":
-    st.header("⚙️ Milling & Processing Entry")
+elif menu == "2. Milling & Processing":
+    st.header("Milling & Processing Entry")
     miller_name = get_miller_input("milling")
-
     with st.form("milling_form", clear_on_submit=True):
         c1, c2 = st.columns(2)
         with c1:
@@ -414,7 +318,6 @@ elif menu == "⚙️ 2. Milling & Processing":
             tempering_water = st.number_input(
                 "Tempering Water (Ltr)", min_value=0.0, value=0.0, step=10.0
             )
-
         submit_mil = st.form_submit_button(
             label="Save Milling Data & Reset Form"
         )
@@ -437,7 +340,7 @@ elif menu == "⚙️ 2. Milling & Processing":
             conn.commit()
             conn.close()
             st.success(
-                f"✅ Milling Data Saved Permanently for {miller_name}!"
+                f"Milling Data Saved Permanently for {miller_name}!"
             )
 
     st.subheader("Saved Milling Entries")
@@ -450,11 +353,9 @@ elif menu == "⚙️ 2. Milling & Processing":
             use_container_width=True,
         )
 
-# --- 4. QUALITY LAB PARAMETERS ---
-elif menu == "🧪 3. Quality Lab Parameters":
-    st.header("🧪 Quality Lab Parameters Entry")
+elif menu == "3. Quality Lab Parameters":
+    st.header("Quality Lab Parameters Entry")
     miller_name = get_miller_input("quality")
-
     with st.form("quality_form", clear_on_submit=True):
         c1, c2, c3 = st.columns(3)
         with c1:
@@ -476,7 +377,6 @@ elif menu == "🧪 3. Quality Lab Parameters":
             chapati_sensory = st.selectbox(
                 "Chapati Sensory", ["Excellent", "Good", "Average", "Poor"]
             )
-
         submit_q = st.form_submit_button(label="Save Quality Data & Reset Form")
         if submit_q:
             conn = get_connection()
@@ -500,7 +400,7 @@ elif menu == "🧪 3. Quality Lab Parameters":
             )
             conn.commit()
             conn.close()
-            st.success("✅ Quality Test Parameters Saved Permanently!")
+            st.success("Quality Test Parameters Saved Permanently!")
 
     st.subheader("Saved Quality Lab Records")
     df_q_saved = load_data("quality")
@@ -512,11 +412,9 @@ elif menu == "🧪 3. Quality Lab Parameters":
             use_container_width=True,
         )
 
-# --- 5. FINISHED GOODS & YIELD ---
-elif menu == "📦 4. Finished Goods & Yield":
-    st.header("📦 Finished Goods, SKU Pouches & Yield Calculation")
+elif menu == "4. Finished Goods & Yield":
+    st.header("Finished Goods, SKU Pouches & Yield Calculation")
     miller_name = get_miller_input("fg")
-
     with st.form("fg_form", clear_on_submit=True):
         c1, c2, c3, c4 = st.columns(4)
         with c1:
@@ -532,7 +430,7 @@ elif menu == "📦 4. Finished Goods & Yield":
                 )
             )
             mrp = st.number_input(
-                "MRP (₹ per unit)", min_value=0.0, value=0.0, step=5.0
+                "MRP (per unit)", min_value=0.0, value=0.0, step=5.0
             )
         with c3:
             product_code = st.text_input("Product Code", value="")
@@ -607,3 +505,351 @@ elif menu == "📦 4. Finished Goods & Yield":
                     mrp,
                     product_code,
                     pouch_500g,
+                    pouch_1kg,
+                    pouch_2kg,
+                    pouch_5kg,
+                    round(total_fin_qty, 2),
+                    bran_qty,
+                    f"{bran_pct:.2f}%",
+                    refraction_qty,
+                    f"{refraction_pct:.2f}%",
+                    f"{yield_pct:.2f}%",
+                    f"{processing_loss_pct:.2f}%",
+                ),
+            )
+            conn.commit()
+            conn.close()
+            st.success(
+                f"FG Saved Permanently for {miller_name}! Total Finished:"
+                f" {total_fin_qty:,.2f} kg | Yield: {yield_pct:.2f}%"
+            )
+
+    st.subheader("Saved Finished Goods Entries")
+    df_fg_saved = load_data("finished_goods")
+    if not df_fg_saved.empty:
+        st.dataframe(
+            df_fg_saved.drop(columns=["id"])
+            if "id" in df_fg_saved.columns
+            else df_fg_saved,
+            use_container_width=True,
+        )
+
+elif menu == "5. Better Nutrition Packing Material":
+    st.header("Better Nutrition - Packing Material Dispatch Entry")
+    miller_name = get_miller_input("pm")
+    with st.form("pm_form", clear_on_submit=True):
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            pm_date = str(st.date_input("Date Sent", datetime.date.today()))
+            carton_type = st.text_input(
+                "Carton Type / Size", placeholder="e.g. 5kg Heavy Box"
+            )
+        with c2:
+            cartons_sent = st.number_input(
+                "Number of Cartons Sent", min_value=0, value=0, step=1
+            )
+            tape_sent = st.number_input(
+                "Number of Tape Rolls", min_value=0, value=0, step=1
+            )
+        with c3:
+            oxysorb_sent = st.number_input(
+                "Oxysorb Qty", min_value=0, value=0, step=10
+            )
+            roll_sku = st.selectbox(
+                "Roll SKU Type", ["500gm Roll", "1kg Roll", "2kg Roll", "5kg Roll"]
+            )
+            roll_qty_sent = st.number_input(
+                "Roll Qty Sent", min_value=0, value=0, step=5
+            )
+
+        submit_pm = st.form_submit_button(
+            label="Save Packing Material Data & Reset"
+        )
+        if submit_pm:
+            conn = get_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO packing_material (date, miller_name, carton_type, cartons_sent, tape_sent, oxysorb_qty, roll_sku, roll_qty_sent)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+                (
+                    pm_date,
+                    miller_name,
+                    carton_type,
+                    cartons_sent,
+                    tape_sent,
+                    oxysorb_sent,
+                    roll_sku,
+                    roll_qty_sent,
+                ),
+            )
+            conn.commit()
+            conn.close()
+            st.success(
+                f"Packing Material Record Saved Permanently for"
+                f" {miller_name}!"
+            )
+
+    st.subheader("Saved Packing Material Sent History")
+    df_pm_saved = load_data("packing_material")
+    if not df_pm_saved.empty:
+        st.dataframe(
+            df_pm_saved.drop(columns=["id"])
+            if "id" in df_pm_saved.columns
+            else df_pm_saved,
+            use_container_width=True,
+        )
+
+elif menu == "6. Daily Dispatch Entry":
+    st.header("Daily Finished Goods Dispatch Entry")
+    miller_name = get_miller_input("dispatch")
+    with st.form("dispatch_form", clear_on_submit=True):
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            dispatch_date = str(
+                st.date_input("Dispatch Date", datetime.date.today())
+            )
+            vehicle_no = st.text_input(
+                "Vehicle No", placeholder="e.g. UP-32-XX-1234"
+            )
+        with c2:
+            disp_500g = st.number_input(
+                "Dispatched 500gm Pouches", min_value=0, value=0, step=10
+            )
+            disp_1kg = st.number_input(
+                "Dispatched 1kg Pouches", min_value=0, value=0, step=10
+            )
+            disp_2kg = st.number_input(
+                "Dispatched 2kg Pouches", min_value=0, value=0, step=10
+            )
+        with c3:
+            disp_5kg = st.number_input(
+                "Dispatched 5kg Pouches", min_value=0, value=0, step=10
+            )
+            cartons_used = st.number_input(
+                "Cartons Used (Minus from Stock)",
+                min_value=0,
+                value=0,
+                step=1,
+            )
+        remarks = st.text_input("Remarks", value="")
+        submit_disp = st.form_submit_button(
+            label="Save Dispatch Data & Reset Form"
+        )
+        if submit_disp:
+            tot_disp_wt = (
+                (disp_500g * 0.5)
+                + (disp_1kg * 1.0)
+                + (disp_2kg * 2.0)
+                + (disp_5kg * 5.0)
+            )
+            conn = get_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO dispatch (dispatch_date, miller_name, vehicle_no, disp_500g, disp_1kg, disp_2kg, disp_5kg, total_dispatched_wt, cartons_used, remarks)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+                (
+                    dispatch_date,
+                    miller_name,
+                    vehicle_no,
+                    disp_500g,
+                    disp_1kg,
+                    disp_2kg,
+                    disp_5kg,
+                    round(tot_disp_wt, 2),
+                    cartons_used,
+                    remarks,
+                ),
+            )
+            conn.commit()
+            conn.close()
+            st.success(
+                f"Dispatch Saved Permanently for {miller_name}! Total"
+                f" Dispatched Wt: {tot_disp_wt:,.2f} kg"
+            )
+
+    st.subheader("Saved Dispatch History")
+    df_disp_saved = load_data("dispatch")
+    if not df_disp_saved.empty:
+        st.dataframe(
+            df_disp_saved.drop(columns=["id"])
+            if "id" in df_disp_saved.columns
+            else df_disp_saved,
+            use_container_width=True,
+        )
+
+elif menu == "7. Master Records & Export (Admin Controls)":
+    st.header("Complete Permanent Master Database & Admin Controls")
+    if st.session_state.get("role") != "Admin":
+        st.error(
+            "Yeh section sirf Admin ke liye hai! Aapne 'Team' password"
+            " se login kiya hai, isliye yahan edit/delete controls hidden"
+            " hain."
+        )
+
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
+        [
+            "Raw Material",
+            "Milling",
+            "Quality Lab",
+            "Finished Goods",
+            "Packing Material",
+            "Dispatch",
+        ]
+    )
+
+
+    def handle_admin_table_view(table_name, report_title, file_name):
+        df = load_data(table_name)
+        if df.empty:
+            st.info("No data found.")
+            return
+        st.download_button(
+            f"Download {report_title} CSV",
+            df.drop(columns=["id"]).to_csv(index=False).encode("utf-8"),
+            file_name,
+            "text/csv",
+        )
+        st.divider()
+
+        if st.session_state.get("role") == "Admin":
+            st.subheader(f"Manage {report_title} Records (Admin Edit & Delete)")
+            for index, row in df.iterrows():
+                row_id = row["id"]
+                date_val = row.get(
+                    "rm_date",
+                    row.get(
+                        "milling_date",
+                        row.get("date", row.get("production_date", "")),
+                    ),
+                )
+                miller_val = row.get("miller_name", "")
+                with st.expander(
+                    f"ID: {row_id} | Date: {date_val} | Miller: {miller_val}"
+                ):
+                    edit_mode_key = f"edit_mode_{table_name}_{row_id}"
+                    if edit_mode_key not in st.session_state:
+                        st.session_state[edit_mode_key] = False
+
+                    c_btn1, c_btn2 = st.columns(2)
+                    with c_btn1:
+                        if st.button(
+                            "Edit Record", key=f"btn_edit_{table_name}_{row_id}"
+                        ):
+                            st.session_state[edit_mode_key] = (
+                                not st.session_state[edit_mode_key]
+                            )
+                            st.rerun()
+                    with c_btn2:
+                        del_confirm_key = (
+                            f"del_confirm_{table_name}_{row_id}"
+                        )
+                        if del_confirm_key not in st.session_state:
+                            st.session_state[del_confirm_key] = False
+                        if not st.session_state[del_confirm_key]:
+                            if st.button(
+                                "Delete", key=f"btn_del_{table_name}_{row_id}"
+                            ):
+                                st.session_state[del_confirm_key] = True
+                                st.rerun()
+                        else:
+                            st.warning(
+                                "Kya aap sach mein is entry ko delete"
+                                " karna chahte hain?"
+                            )
+                            yb1, yb2 = st.columns(2)
+                            with yb1:
+                                if st.button(
+                                    "Haan, Delete Karo",
+                                    key=f"confirm_del_{table_name}_{row_id}",
+                                ):
+                                    conn = get_connection()
+                                    cursor = conn.cursor()
+                                    cursor.execute(
+                                        f"DELETE FROM {table_name} WHERE id = ?",
+                                        (row_id,),
+                                    )
+                                    conn.commit()
+                                    conn.close()
+                                    st.session_state[del_confirm_key] = False
+                                    st.success(
+                                        f"Deleted ID {row_id} successfully!"
+                                    )
+                                    st.rerun()
+                            with yb2:
+                                if st.button(
+                                    "Nahi, Rehne Do",
+                                    key=f"cancel_del_{table_name}_{row_id}",
+                                ):
+                                    st.session_state[del_confirm_key] = False
+                                    st.rerun()
+
+                    if st.session_state[edit_mode_key]:
+                        st.write(f"**Editing ID {row_id}**")
+                        with st.form(key=f"update_form_{table_name}_{row_id}"):
+                            updated_data = {}
+                            for col_name in df.columns:
+                                if col_name == "id":
+                                    continue
+                                val = row[col_name]
+                                if isinstance(val, (int, float)):
+                                    updated_data[col_name] = st.number_input(
+                                        col_name, value=float(val)
+                                    )
+                                else:
+                                    updated_data[col_name] = st.text_input(
+                                        col_name, value=str(val)
+                                    )
+                            update_submit = st.form_submit_button(
+                                "Save Changes (Update)"
+                            )
+                            if update_submit:
+                                conn = get_connection()
+                                cursor = conn.cursor()
+                                set_clause = ", ".join(
+                                    [f"{k} = ?" for k in updated_data.keys()]
+                                )
+                                values = list(updated_data.values()) + [
+                                    row_id
+                                ]
+                                cursor.execute(
+                                    f"UPDATE {table_name} SET {set_clause} WHERE id = ?",
+                                    values,
+                                )
+                                conn.commit()
+                                conn.close()
+                                st.session_state[edit_mode_key] = False
+                                st.success(
+                                    f"ID {row_id} updated successfully!"
+                                )
+                                st.rerun()
+            st.divider()
+        st.subheader(f"Full {report_title} Table View")
+        st.dataframe(
+            df.drop(columns=["id"]) if "id" in df.columns else df,
+            use_container_width=True,
+        )
+
+    with tab1:
+        handle_admin_table_view(
+            "raw_material", "Raw Material", "rm_report.csv"
+        )
+    with tab2:
+        handle_admin_table_view("milling", "Milling", "milling_report.csv")
+    with tab3:
+        handle_admin_table_view("quality", "Quality Lab", "quality_report.csv")
+    with tab4:
+        handle_admin_table_view(
+            "finished_goods", "Finished Goods", "fg_report.csv"
+        )
+    with tab5:
+        handle_admin_table_view(
+            "packing_material",
+            "Packing Material",
+            "packing_material_report.csv",
+        )
+    with tab6:
+        handle_admin_table_view("dispatch", "Dispatch", "dispatch_report.csv")
