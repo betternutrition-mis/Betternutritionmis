@@ -761,158 +761,172 @@ elif menu == "2. Milling & Quality Lab Entry":
 elif menu == "3. Finished Goods & Yield":
     st.header("Finished Goods Production & Yield Tracking")
     df_mil = load_data("milling")
+    df_fg_existing = load_data("finished_goods")
+
     if df_mil.empty:
         st.warning(
             "Pehle Menu 2 से Milling entry karein, tabhi Finished Goods entry"
             " ho sakegi."
         )
     else:
-        df_mil["label"] = (
-            df_mil["miller_name"]
-            + " ("
-            + df_mil["milling_date"]
-            + ")"
+        # Filter out milling batches that already have finished goods entered
+        filled_milling_ids = (
+            df_fg_existing["milling_id"].tolist()
+            if not df_fg_existing.empty and "milling_id" in df_fg_existing.columns
+            else []
         )
-        sel_milling = st.selectbox(
-            "Select Milling Batch", [None] + df_mil["label"].tolist()
-        )
-        
-        if sel_milling is not None:
-            row_mil = df_mil[df_mil["label"] == sel_milling].iloc[0]
-            milling_id = int(row_mil["id"])
-            miller_name = row_mil["miller_name"]
-            milling_qty = float(row_mil["milling_qty"])
-            milling_date_str = row_mil["milling_date"]
+        available_mil = df_mil[~df_mil["id"].isin(filled_milling_ids)]
 
-            default_prod_date = datetime.date.today()
-            try:
-                default_prod_date = datetime.datetime.strptime(milling_date_str, "%d %b %Y").date()
-            except Exception:
-                pass
+        if available_mil.empty:
+            st.success("Sabhi milling batches ke liye Finished Goods entry ki ja chuki hai!")
+        else:
+            available_mil["label"] = (
+                available_mil["miller_name"]
+                + " ("
+                + available_mil["milling_date"]
+                + ")"
+            )
+            sel_milling = st.selectbox(
+                "Select Milling Batch", [None] + available_mil["label"].tolist()
+            )
+            
+            if sel_milling is not None:
+                row_mil = available_mil[available_mil["label"] == sel_milling].iloc[0]
+                milling_id = int(row_mil["id"])
+                miller_name = row_mil["miller_name"]
+                milling_qty = float(row_mil["milling_qty"])
+                milling_date_str = row_mil["milling_date"]
 
-            st.info(f"Selected Miller: **{miller_name}** | Milling Date: **{milling_date_str}** | Milling Qty: **{milling_qty:,.2f} kg**")
+                default_prod_date = datetime.date.today()
+                try:
+                    default_prod_date = datetime.datetime.strptime(milling_date_str, "%d %b %Y").date()
+                except Exception:
+                    pass
 
-            with st.form("fg_form", clear_on_submit=True):
-                c1, c2, c3 = st.columns(3)
-                with c1:
-                    prod_date_obj = st.date_input("Production Date", value=default_prod_date)
-                    production_date = prod_date_obj.strftime("%d %b %Y")
-                    
-                    mfd_date_obj = st.date_input("MFD Date", value=datetime.date.today())
-                    mfd_date = mfd_date_obj.strftime("%b %Y")
+                st.info(f"Selected Miller: **{miller_name}** | Milling Date: **{milling_date_str}** | Milling Qty: **{milling_qty:,.2f} kg**")
 
-                    expiry_date_obj = st.date_input("Expiry Date", value=datetime.date.today() + datetime.timedelta(days=180))
-                    expiry_date = expiry_date_obj.strftime("%d %b %Y")
-                with c2:
-                    mrp = st.number_input("MRP (Rs)", value=None, placeholder="Type MRP...", step=1.0)
-                    product_code = st.text_input(
-                        "Product Code / SKU", value="BN-ATTA-01"
-                    )
-                    pouch_500g = st.number_input(
-                        "500g Pouches Count", value=None, placeholder="0", step=1
-                    )
-                with c3:
-                    pouch_1kg = st.number_input(
-                        "1kg Pouches Count", value=None, placeholder="0", step=1
-                    )
-                    pouch_2kg = st.number_input(
-                        "2kg Pouches Count", value=None, placeholder="0", step=1
-                    )
-                    pouch_5kg = st.number_input(
-                        "5kg Pouches Count", value=None, placeholder="0", step=1
-                    )
+                with st.form("fg_form", clear_on_submit=True):
+                    c1, c2, c3 = st.columns(3)
+                    with c1:
+                        prod_date_obj = st.date_input("Production Date", value=default_prod_date)
+                        production_date = prod_date_obj.strftime("%d %b %Y")
+                        
+                        mfd_date_obj = st.date_input("MFD Date", value=datetime.date.today())
+                        mfd_date = mfd_date_obj.strftime("%b %Y")
 
-                st.divider()
-                sc1, sc2 = st.columns(2)
-                with sc1:
-                    bran_qty = st.number_input(
-                        "Bran Quantity (kg)", value=None, placeholder="Type bran qty...", step=1.0
-                    )
-                with sc2:
-                    refraction_qty = st.number_input(
-                        "Refraction Quantity (kg)",
-                        value=None,
-                        placeholder="Type refraction qty...",
-                        step=1.0,
-                    )
+                        expiry_date_obj = st.date_input("Expiry Date", value=datetime.date.today() + datetime.timedelta(days=180))
+                        expiry_date = expiry_date_obj.strftime("%d %b %Y")
+                    with c2:
+                        mrp = st.number_input("MRP (Rs)", value=None, placeholder="Type MRP...", step=1.0)
+                        product_code = st.text_input(
+                            "Product Code / SKU", value="BN-ATTA-01"
+                        )
+                        pouch_500g = st.number_input(
+                            "500g Pouches Count", value=None, placeholder="0", step=1
+                        )
+                    with c3:
+                        pouch_1kg = st.number_input(
+                            "1kg Pouches Count", value=None, placeholder="0", step=1
+                        )
+                        pouch_2kg = st.number_input(
+                            "2kg Pouches Count", value=None, placeholder="0", step=1
+                        )
+                        pouch_5kg = st.number_input(
+                            "5kg Pouches Count", value=None, placeholder="0", step=1
+                        )
 
-                submit_fg = st.form_submit_button(
-                    label="Calculate Yield & Save Finished Goods"
-                )
-                if submit_fg:
-                    f_500g = int(pouch_500g) if pouch_500g is not None else 0
-                    f_1kg = int(pouch_1kg) if pouch_1kg is not None else 0
-                    f_2kg = int(pouch_2kg) if pouch_2kg is not None else 0
-                    f_5kg = int(pouch_5kg) if pouch_5kg is not None else 0
-                    f_mrp = float(mrp) if mrp is not None else 0.0
-                    f_bran = float(bran_qty) if bran_qty is not None else 0.0
-                    f_refr = float(refraction_qty) if refraction_qty is not None else 0.0
+                    st.divider()
+                    sc1, sc2 = st.columns(2)
+                    with sc1:
+                        bran_qty = st.number_input(
+                            "Bran Quantity (kg)", value=None, placeholder="Type bran qty...", step=1.0
+                        )
+                    with sc2:
+                        refraction_qty = st.number_input(
+                            "Refraction Quantity (kg)",
+                            value=None,
+                            placeholder="Type refraction qty...",
+                            step=1.0,
+                        )
 
-                    wt_500g = f_500g * 0.5
-                    wt_1kg = f_1kg * 1.0
-                    wt_2kg = f_2kg * 2.0
-                    wt_5kg = f_5kg * 5.0
-                    total_finished_qty = wt_500g + wt_1kg + wt_2kg + wt_5kg
+                    submit_fg = st.form_submit_button(
+                        label="Calculate Yield & Save Finished Goods"
+                    )
+                    if submit_fg:
+                        f_500g = int(pouch_500g) if pouch_500g is not None else 0
+                        f_1kg = int(pouch_1kg) if pouch_1kg is not None else 0
+                        f_2kg = int(pouch_2kg) if pouch_2kg is not None else 0
+                        f_5kg = int(pouch_5kg) if pouch_5kg is not None else 0
+                        f_mrp = float(mrp) if mrp is not None else 0.0
+                        f_bran = float(bran_qty) if bran_qty is not None else 0.0
+                        f_refr = float(refraction_qty) if refraction_qty is not None else 0.0
 
-                    bran_pct = (
-                        (f_bran / milling_qty) * 100 if milling_qty > 0 else 0.0
-                    )
-                    refraction_pct = (
-                        (f_refr / milling_qty) * 100
-                        if milling_qty > 0
-                        else 0.0
-                    )
-                    yield_pct = (
-                        (total_finished_qty / milling_qty) * 100
-                        if milling_qty > 0
-                        else 0.0
-                    )
+                        wt_500g = f_500g * 0.5
+                        wt_1kg = f_1kg * 1.0
+                        wt_2kg = f_2kg * 2.0
+                        wt_5kg = f_5kg * 5.0
+                        total_finished_qty = wt_500g + wt_1kg + wt_2kg + wt_5kg
 
-                    total_accounted = (
-                        total_finished_qty + f_bran + f_refr
-                    )
-                    processing_loss_qty = milling_qty - total_accounted
-                    processing_loss_pct = (
-                        (processing_loss_qty / milling_qty) * 100
-                        if milling_qty > 0
-                        else 0.0
-                    )
+                        bran_pct = (
+                            (f_bran / milling_qty) * 100 if milling_qty > 0 else 0.0
+                        )
+                        refraction_pct = (
+                            (f_refr / milling_qty) * 100
+                            if milling_qty > 0
+                            else 0.0
+                        )
+                        yield_pct = (
+                            (total_finished_qty / milling_qty) * 100
+                            if milling_qty > 0
+                            else 0.0
+                        )
 
-                    conn = get_connection()
-                    cursor = conn.cursor()
-                    cursor.execute(
-                        """
-                        INSERT INTO finished_goods (milling_id, production_date, miller_name, mfd_date, expiry_date, mrp, product_code, pouch_500g, pouch_1kg, pouch_2kg, pouch_5kg, total_finished_qty, bran_qty, bran_pct, refraction_qty, refraction_pct, yield_pct, processing_loss_pct)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                        (
-                            milling_id,
-                            production_date,
-                            miller_name,
-                            mfd_date,
-                            expiry_date,
-                            f_mrp,
-                            product_code,
-                            f_500g,
-                            f_1kg,
-                            f_2kg,
-                            f_5kg,
-                            round(total_finished_qty, 2),
-                            f_bran,
-                            f"{bran_pct:.2f}%",
-                            f_refr,
-                            f"{refraction_pct:.2f}%",
-                            f"{yield_pct:.2f}%",
-                            f"{processing_loss_pct:.2f}%",
-                        ),
-                    )
-                    conn.commit()
-                    conn.close()
-                    st.success(
-                        f"Finished Goods Saved! Total Finished Output:"
-                        f" {total_finished_qty:,.2f} kg | Yield:"
-                        f" {yield_pct:.2f}%"
-                    )
+                        total_accounted = (
+                            total_finished_qty + f_bran + f_refr
+                        )
+                        processing_loss_qty = milling_qty - total_accounted
+                        processing_loss_pct = (
+                            (processing_loss_qty / milling_qty) * 100
+                            if milling_qty > 0
+                            else 0.0
+                        )
+
+                        conn = get_connection()
+                        cursor = conn.cursor()
+                        cursor.execute(
+                            """
+                            INSERT INTO finished_goods (milling_id, production_date, miller_name, mfd_date, expiry_date, mrp, product_code, pouch_500g, pouch_1kg, pouch_2kg, pouch_5kg, total_finished_qty, bran_qty, bran_pct, refraction_qty, refraction_pct, yield_pct, processing_loss_pct)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                            (
+                                milling_id,
+                                production_date,
+                                miller_name,
+                                mfd_date,
+                                expiry_date,
+                                f_mrp,
+                                product_code,
+                                f_500g,
+                                f_1kg,
+                                f_2kg,
+                                f_5kg,
+                                round(total_finished_qty, 2),
+                                f_bran,
+                                f"{bran_pct:.2f}%",
+                                f_refr,
+                                f"{refraction_pct:.2f}%",
+                                f"{yield_pct:.2f}%",
+                                f"{processing_loss_pct:.2f}%",
+                            ),
+                        )
+                        conn.commit()
+                        conn.close()
+                        st.success(
+                            f"Finished Goods Saved! Total Finished Output:"
+                            f" {total_finished_qty:,.2f} kg | Yield:"
+                            f" {yield_pct:.2f}%"
+                        )
+                        st.rerun()
 
     st.subheader("Saved Finished Goods Records")
     df_fg_saved = load_data("finished_goods")
