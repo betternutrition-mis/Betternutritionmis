@@ -363,7 +363,7 @@ elif menu == "1. Raw Material Received":
                     else 0.0
                 )
                 hecto_wt = st.number_input(
-                    "Hectoliter Weight", min_value=0.0, value=default_hecto, step=0.1
+                    "Hectoliter Weight", min_value=0.0, value=default_hecto, step=0.1, format="%.1f"
                 )
 
                 default_mois = (
@@ -372,7 +372,7 @@ elif menu == "1. Raw Material Received":
                     else 0.0
                 )
                 moisture_rm = st.number_input(
-                    "Moisture % (RM)", min_value=0.0, value=default_mois, step=0.1
+                    "Moisture % (RM)", min_value=0.0, value=default_mois, step=0.1, format="%.1f"
                 )
 
                 default_broken = (
@@ -381,7 +381,7 @@ elif menu == "1. Raw Material Received":
                     else 0.0
                 )
                 broken_pct = st.number_input(
-                    "Broken %", min_value=0.0, value=default_broken, step=0.1
+                    "Broken %", min_value=0.0, value=default_broken, step=0.1, format="%.1f"
                 )
             with c3:
                 infestation_opts = ["Nil", "Low", "Medium", "High"]
@@ -406,7 +406,7 @@ elif menu == "1. Raw Material Received":
                     float(edit_data["gross_qty"]) if edit_data is not None else 0.0
                 )
                 gross_qty = st.number_input(
-                    "Gross Qty (kg)", min_value=0.0, value=default_gross, step=10.0
+                    "Gross Qty (kg)", min_value=0.0, value=default_gross, step=10.0, format="%.2f"
                 )
 
             default_rem = edit_data["remarks"] if edit_data is not None else ""
@@ -507,12 +507,12 @@ elif menu == "2. Milling & Quality Lab Entry":
                 mil_date_obj = st.date_input("Milling Date", datetime.date.today())
                 milling_date = mil_date_obj.strftime("%d %b %Y")
                 milling_qty = st.number_input(
-                    "Milling Quantity (kg)", min_value=0.0, value=0.0, step=10.0
+                    "Milling Quantity (kg)", value=None, placeholder="Type qty...", step=10.0
                 )
             with c2:
                 tempering_time = st.text_input("Tempering Time", value="")
                 tempering_water = st.number_input(
-                    "Tempering Water (Ltr)", min_value=0.0, value=0.0, step=10.0
+                    "Tempering Water (Ltr)", value=None, placeholder="Type water...", step=10.0
                 )
 
             st.divider()
@@ -523,22 +523,22 @@ elif menu == "2. Milling & Quality Lab Entry":
                 q_date = q_date_obj.strftime("%d %b %Y")
                 moisture_milled = st.number_input(
                     "Moisture % (Milled)",
-                    min_value=0.0,
-                    value=0.0,
+                    value=None,
+                    placeholder="Type moisture...",
                     step=0.1,
                 )
                 granulation = st.text_input("Granulation", value="")
             with qc2:
                 ccl4 = st.text_input("CCL4", value="")
                 ash_aia = st.number_input(
-                    "Ash + AIA", min_value=0.0, value=0.0, step=0.01, format="%.3f"
+                    "Ash + AIA", value=None, placeholder="Type ash...", step=0.01, format="%.3f"
                 )
                 alcoholic_acidity = st.number_input(
-                    "Alcoholic Acidity", min_value=0.0, value=0.0, step=0.001, format="%.4f"
+                    "Alcoholic Acidity", value=None, placeholder="Type acidity...", step=0.001, format="%.4f"
                 )
             with qc3:
                 wap = st.number_input(
-                    "WAP", min_value=0.0, value=0.0, step=0.01, format="%.2f"
+                    "WAP", value=None, placeholder="Type WAP...", step=0.01, format="%.2f"
                 )
                 gluten = st.text_input("Gluten", value="")
                 chapati_sensory = st.selectbox(
@@ -550,6 +550,13 @@ elif menu == "2. Milling & Quality Lab Entry":
                 label="Save Milling & Quality Data"
             )
             if submit_both:
+                final_mil_qty = milling_qty if milling_qty is not None else 0.0
+                final_temp_water = tempering_water if tempering_water is not None else 0.0
+                final_mois_milled = moisture_milled if moisture_milled is not None else 0.0
+                final_ash = ash_aia if ash_aia is not None else 0.0
+                final_acidity = alcoholic_acidity if alcoholic_acidity is not None else 0.0
+                final_wap = wap if wap is not None else 0.0
+
                 conn = get_connection()
                 cursor = conn.cursor()
                 cursor.execute(
@@ -560,9 +567,9 @@ elif menu == "2. Milling & Quality Lab Entry":
                     (
                         milling_date,
                         miller_name,
-                        milling_qty,
+                        final_mil_qty,
                         tempering_time,
-                        tempering_water,
+                        final_temp_water,
                     ),
                 )
                 milling_id = cursor.lastrowid
@@ -575,12 +582,12 @@ elif menu == "2. Milling & Quality Lab Entry":
                         milling_id,
                         q_date,
                         miller_name,
-                        moisture_milled,
+                        final_mois_milled,
                         granulation,
                         ccl4,
-                        ash_aia,
-                        alcoholic_acidity,
-                        wap,
+                        final_ash,
+                        final_acidity,
+                        final_wap,
                         gluten,
                         chapati_sensory,
                     ),
@@ -639,20 +646,20 @@ elif menu == "2. Milling & Quality Lab Entry":
                     oq_date = oq_date_obj.strftime("%d %b %Y")
                     omoisture = st.number_input(
                         "Moisture % (Milled)",
-                        min_value=0.0,
-                        value=0.0,
+                        value=None,
+                        placeholder="Type moisture...",
                         step=0.1,
                     )
                     ogranulation = st.text_input("Granulation", value="")
                     occl4 = st.text_input("CCL4", value="")
                     oash = st.number_input(
-                        "Ash + AIA", min_value=0.0, value=0.0, step=0.01, format="%.3f"
+                        "Ash + AIA", value=None, placeholder="Type ash...", step=0.01, format="%.3f"
                     )
                     oacidity = st.number_input(
-                        "Alcoholic Acidity", min_value=0.0, value=0.0, step=0.001, format="%.4f"
+                        "Alcoholic Acidity", value=None, placeholder="Type acidity...", step=0.001, format="%.4f"
                     )
                     owap = st.number_input(
-                        "WAP", min_value=0.0, value=0.0, step=0.01, format="%.2f"
+                        "WAP", value=None, placeholder="Type WAP...", step=0.01, format="%.2f"
                     )
                     ogluten = st.text_input("Gluten", value="")
                     osensory = st.selectbox(
@@ -664,6 +671,11 @@ elif menu == "2. Milling & Quality Lab Entry":
                         "Save Quality for this Old Batch"
                     )
                     if submit_old_q:
+                        final_omoisture = omoisture if omoisture is not None else 0.0
+                        final_oash = oash if oash is not None else 0.0
+                        final_oacidity = oacidity if oacidity is not None else 0.0
+                        final_owap = owap if owap is not None else 0.0
+
                         conn = get_connection()
                         cursor = conn.cursor()
                         cursor.execute(
@@ -675,12 +687,12 @@ elif menu == "2. Milling & Quality Lab Entry":
                                 target_m_id,
                                 oq_date,
                                 t_miller,
-                                omoisture,
+                                final_omoisture,
                                 ogranulation,
                                 occl4,
-                                oash,
-                                oacidity,
-                                owap,
+                                final_oash,
+                                final_oacidity,
+                                final_owap,
                                 ogluten,
                                 osensory,
                             ),
@@ -762,7 +774,7 @@ elif menu == "3. Finished Goods & Yield":
             + ")"
         )
         sel_milling = st.selectbox(
-            "Select Milling Batch (Miller Name & Milling Date)", [None] + df_mil["label"].tolist()
+            "Select Milling Batch", [None] + df_mil["label"].tolist()
         )
         
         if sel_milling is not None:
@@ -772,7 +784,6 @@ elif menu == "3. Finished Goods & Yield":
             milling_qty = float(row_mil["milling_qty"])
             milling_date_str = row_mil["milling_date"]
 
-            # Parse milling date to set as default production date
             default_prod_date = datetime.date.today()
             try:
                 default_prod_date = datetime.datetime.strptime(milling_date_str, "%d %b %Y").date()
@@ -786,40 +797,42 @@ elif menu == "3. Finished Goods & Yield":
                 with c1:
                     prod_date_obj = st.date_input("Production Date", value=default_prod_date)
                     production_date = prod_date_obj.strftime("%d %b %Y")
-                    mfd_date = st.text_input("MFD Date", placeholder="e.g. Jun 2026")
-                    expiry_date = st.text_input(
-                        "Expiry Date", placeholder="e.g. 6 Months"
-                    )
+                    
+                    mfd_date_obj = st.date_input("MFD Date", value=datetime.date.today())
+                    mfd_date = mfd_date_obj.strftime("%b %Y")
+
+                    expiry_date_obj = st.date_input("Expiry Date", value=datetime.date.today() + datetime.timedelta(days=180))
+                    expiry_date = expiry_date_obj.strftime("%d %b %Y")
                 with c2:
-                    mrp = st.number_input("MRP (Rs)", min_value=0.0, value=0.0)
+                    mrp = st.number_input("MRP (Rs)", value=None, placeholder="Type MRP...", step=1.0)
                     product_code = st.text_input(
                         "Product Code / SKU", value="BN-ATTA-01"
                     )
                     pouch_500g = st.number_input(
-                        "500g Pouches Count", min_value=0, value=0, step=1
+                        "500g Pouches Count", value=None, placeholder="0", step=1
                     )
                 with c3:
                     pouch_1kg = st.number_input(
-                        "1kg Pouches Count", min_value=0, value=0, step=1
+                        "1kg Pouches Count", value=None, placeholder="0", step=1
                     )
                     pouch_2kg = st.number_input(
-                        "2kg Pouches Count", min_value=0, value=0, step=1
+                        "2kg Pouches Count", value=None, placeholder="0", step=1
                     )
                     pouch_5kg = st.number_input(
-                        "5kg Pouches Count", min_value=0, value=0, step=1
+                        "5kg Pouches Count", value=None, placeholder="0", step=1
                     )
 
                 st.divider()
                 sc1, sc2 = st.columns(2)
                 with sc1:
                     bran_qty = st.number_input(
-                        "Bran Quantity (kg)", min_value=0.0, value=0.0, step=1.0
+                        "Bran Quantity (kg)", value=None, placeholder="Type bran qty...", step=1.0
                     )
                 with sc2:
                     refraction_qty = st.number_input(
                         "Refraction Quantity (kg)",
-                        min_value=0.0,
-                        value=0.0,
+                        value=None,
+                        placeholder="Type refraction qty...",
                         step=1.0,
                     )
 
@@ -827,17 +840,25 @@ elif menu == "3. Finished Goods & Yield":
                     label="Calculate Yield & Save Finished Goods"
                 )
                 if submit_fg:
-                    wt_500g = pouch_500g * 0.5
-                    wt_1kg = pouch_1kg * 1.0
-                    wt_2kg = pouch_2kg * 2.0
-                    wt_5kg = pouch_5kg * 5.0
+                    f_500g = int(pouch_500g) if pouch_500g is not None else 0
+                    f_1kg = int(pouch_1kg) if pouch_1kg is not None else 0
+                    f_2kg = int(pouch_2kg) if pouch_2kg is not None else 0
+                    f_5kg = int(pouch_5kg) if pouch_5kg is not None else 0
+                    f_mrp = float(mrp) if mrp is not None else 0.0
+                    f_bran = float(bran_qty) if bran_qty is not None else 0.0
+                    f_refr = float(refraction_qty) if refraction_qty is not None else 0.0
+
+                    wt_500g = f_500g * 0.5
+                    wt_1kg = f_1kg * 1.0
+                    wt_2kg = f_2kg * 2.0
+                    wt_5kg = f_5kg * 5.0
                     total_finished_qty = wt_500g + wt_1kg + wt_2kg + wt_5kg
 
                     bran_pct = (
-                        (bran_qty / milling_qty) * 100 if milling_qty > 0 else 0.0
+                        (f_bran / milling_qty) * 100 if milling_qty > 0 else 0.0
                     )
                     refraction_pct = (
-                        (refraction_qty / milling_qty) * 100
+                        (f_refr / milling_qty) * 100
                         if milling_qty > 0
                         else 0.0
                     )
@@ -848,7 +869,7 @@ elif menu == "3. Finished Goods & Yield":
                     )
 
                     total_accounted = (
-                        total_finished_qty + bran_qty + refraction_qty
+                        total_finished_qty + f_bran + f_refr
                     )
                     processing_loss_qty = milling_qty - total_accounted
                     processing_loss_pct = (
@@ -870,16 +891,16 @@ elif menu == "3. Finished Goods & Yield":
                             miller_name,
                             mfd_date,
                             expiry_date,
-                            mrp,
+                            f_mrp,
                             product_code,
-                            pouch_500g,
-                            pouch_1kg,
-                            pouch_2kg,
-                            pouch_5kg,
+                            f_500g,
+                            f_1kg,
+                            f_2kg,
+                            f_5kg,
                             round(total_finished_qty, 2),
-                            bran_qty,
+                            f_bran,
                             f"{bran_pct:.2f}%",
-                            refraction_qty,
+                            f_refr,
                             f"{refraction_pct:.2f}%",
                             f"{yield_pct:.2f}%",
                             f"{processing_loss_pct:.2f}%",
@@ -931,20 +952,20 @@ elif menu == "4. Better Nutrition Packing Material":
                 "Carton Type", ["500g Carton", "1kg Carton", "2kg Carton", "5kg Carton"]
             )
             cartons_sent = st.number_input(
-                "Cartons Sent (Units)", min_value=0, value=0, step=1
+                "Cartons Sent (Units)", value=None, placeholder="0", step=1
             )
             tape_sent = st.number_input(
-                "Tape Sent (Rolls)", min_value=0, value=0, step=1
+                "Tape Sent (Rolls)", value=None, placeholder="0", step=1
             )
         with c2:
             oxysorb_qty = st.number_input(
-                "Oxysorb Packets Qty", min_value=0, value=0, step=10
+                "Oxysorb Packets Qty", value=None, placeholder="0", step=10
             )
             roll_sku = st.text_input("Roll SKU / Description", value="")
             roll_qty_sent = st.number_input(
                 "Roll Qty Sent (kg or meters)",
-                min_value=0.0,
-                value=0.0,
+                value=None,
+                placeholder="0",
                 step=1.0,
             )
 
@@ -952,6 +973,11 @@ elif menu == "4. Better Nutrition Packing Material":
             label="Save Packing Material Entry"
         )
         if submit_pm:
+            f_cartons = int(cartons_sent) if cartons_sent is not None else 0
+            f_tape = int(tape_sent) if tape_sent is not None else 0
+            f_oxysorb = int(oxysorb_qty) if oxysorb_qty is not None else 0
+            f_roll_qty = float(roll_qty_sent) if roll_qty_sent is not None else 0.0
+
             conn = get_connection()
             cursor = conn.cursor()
             cursor.execute(
@@ -963,11 +989,11 @@ elif menu == "4. Better Nutrition Packing Material":
                     pm_date,
                     miller_name,
                     carton_type,
-                    cartons_sent,
-                    tape_sent,
-                    oxysorb_qty,
+                    f_cartons,
+                    f_tape,
+                    f_oxysorb,
                     roll_sku,
-                    roll_qty_sent,
+                    f_roll_qty,
                 ),
             )
             conn.commit()
@@ -1014,20 +1040,20 @@ elif menu == "5. Daily Dispatch Entry":
                 "Vehicle Number", placeholder="e.g. UP-32-XZ-1234"
             )
             disp_500g = st.number_input(
-                "Dispatched 500g Pouches", min_value=0, value=0, step=1
+                "Dispatched 500g Pouches", value=None, placeholder="0", step=1
             )
             disp_1kg = st.number_input(
-                "Dispatched 1kg Pouches", min_value=0, value=0, step=1
+                "Dispatched 1kg Pouches", value=None, placeholder="0", step=1
             )
         with c2:
             disp_2kg = st.number_input(
-                "Dispatched 2kg Pouches", min_value=0, value=0, step=1
+                "Dispatched 2kg Pouches", value=None, placeholder="0", step=1
             )
             disp_5kg = st.number_input(
-                "Dispatched 5kg Pouches", min_value=0, value=0, step=1
+                "Dispatched 5kg Pouches", value=None, placeholder="0", step=1
             )
             cartons_used = st.number_input(
-                "Cartons Used", min_value=0, value=0, step=1
+                "Cartons Used", value=None, placeholder="0", step=1
             )
             remarks = st.text_input("Dispatch Remarks / Destination", value="")
 
@@ -1035,11 +1061,17 @@ elif menu == "5. Daily Dispatch Entry":
             label="Save Dispatch Entry"
         )
         if submit_disp:
+            f_d500 = int(disp_500g) if disp_500g is not None else 0
+            f_d1k = int(disp_1kg) if disp_1kg is not None else 0
+            f_d2k = int(disp_2kg) if disp_2kg is not None else 0
+            f_d5k = int(disp_5kg) if disp_5kg is not None else 0
+            f_cartons_used = int(cartons_used) if cartons_used is not None else 0
+
             total_disp_wt = (
-                (disp_500g * 0.5)
-                + (disp_1kg * 1.0)
-                + (disp_2kg * 2.0)
-                + (disp_5kg * 5.0)
+                (f_d500 * 0.5)
+                + (f_d1k * 1.0)
+                + (f_d2k * 2.0)
+                + (f_d5k * 5.0)
             )
             conn = get_connection()
             cursor = conn.cursor()
@@ -1052,12 +1084,12 @@ elif menu == "5. Daily Dispatch Entry":
                     dispatch_date,
                     miller_name,
                     vehicle_no,
-                    disp_500g,
-                    disp_1kg,
-                    disp_2kg,
-                    disp_5kg,
+                    f_d500,
+                    f_d1k,
+                    f_d2k,
+                    f_d5k,
                     round(total_disp_wt, 2),
-                    cartons_used,
+                    f_cartons_used,
                     remarks,
                 ),
             )
@@ -1127,7 +1159,6 @@ elif menu == "6. Master Records & Export (Admin Controls)":
         else:
             st.dataframe(df_manage, use_container_width=True)
 
-            # CSV Download Button
             csv_data = df_manage.to_csv(index=False).encode("utf-8")
             st.download_button(
                 label=f"📥 Download `{table_to_manage}` as CSV",
