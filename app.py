@@ -36,7 +36,7 @@ def check_password():
 
     if "password_correct" not in st.session_state:
         st.text_input(
-            "Password daliye app kholne ke liye:",
+            "Enter password to unlock application:",
             type="password",
             on_change=password_entered,
             key="password",
@@ -44,12 +44,12 @@ def check_password():
         return False
     elif not st.session_state["password_correct"]:
         st.text_input(
-            "Password daliye app kholne ke liye:",
+            "Enter password to unlock application:",
             type="password",
             on_change=password_entered,
             key="password",
         )
-        st.error("Password galat hai. Dobara koshish karein.")
+        st.error("Incorrect password. Please try again.")
         return False
     else:
         return True
@@ -159,7 +159,7 @@ if menu == "Month-wise Summary Dashboard":
     st.header("Executive Month-wise Summary & Stock Dashboard")
     df_rm = load_data("raw_material")
     if df_rm.empty:
-        st.info("Pehle kuch data entries karein tab dashboard show hoga.")
+        st.info("Please enter some data entries to view the dashboard.")
     else:
         df_rm["Month-Year"] = pd.to_datetime(df_rm["rm_date"]).dt.strftime(
             "%B %Y"
@@ -430,15 +430,12 @@ elif menu == "2. Milling & Quality Lab Entry":
                 st.rerun()
 
     with tab_update_old:
-        st.subheader(
-            "Purane Milling Batches Jinme Quality Data Nahi Hai, Unko Update"
-            " Karein"
-        )
+        st.subheader("Update Quality for Old Milling Batches")
         df_mil = load_data("milling")
         df_q = load_data("quality")
 
         if df_mil.empty:
-            st.info("Koi milling record nahi mila.")
+            st.info("No milling records found.")
         else:
             tested_ids = (
                 df_q["milling_id"].tolist()
@@ -449,34 +446,46 @@ elif menu == "2. Milling & Quality Lab Entry":
 
             if untested_mil.empty:
                 st.success(
-                    "Sabhi purane milling batches ki quality entry pehle se ho"
-                    " chuki hai!"
+                    "Quality data has already been entered for all milling"
+                    " batches!"
                 )
             else:
-                untested_mil["label"] = (
-                    "Batch ID: "
-                    + untested_mil["id"].astype(str)
-                    + " | Miller: "
-                    + untested_mil["miller_name"]
-                    + " | Date: "
-                    + untested_mil["milling_date"]
-                    + " | Qty: "
-                    + untested_mil["milling_qty"].astype(str)
-                    + " kg"
+                # Step 1: Select Milling Date from available untested dates
+                available_dates = sorted(untested_mil["milling_date"].unique())
+                selected_milling_date = st.selectbox(
+                    "Select Milling Date", available_dates
                 )
-                sel_batch = st.selectbox(
-                    "Select Untested Milling Batch", untested_mil["label"].tolist()
+
+                # Filter batches matching the selected date
+                date_matched_batches = untested_mil[
+                    untested_mil["milling_date"] == selected_milling_date
+                ]
+
+                # Step 2: Select Miller for that date
+                miller_options = date_matched_batches[
+                    "miller_name"
+                ].tolist()
+                selected_miller_name = st.selectbox(
+                    "Select Miller Name", miller_options
                 )
-                sel_row = untested_mil[
-                    untested_mil["label"] == sel_batch
+
+                # Fetch specific batch row
+                selected_batch_row = date_matched_batches[
+                    date_matched_batches["miller_name"] == selected_miller_name
                 ].iloc[0]
-                target_m_id = int(sel_row["id"])
-                t_miller = sel_row["miller_name"]
+                target_m_id = int(selected_batch_row["id"])
+                batch_qty = selected_batch_row["milling_qty"]
+
+                # Display batch info clearly in boxes/metrics
+                st.info(
+                    f"Selected Batch Details -> ID: **{target_m_id}** | Date:"
+                    f" **{selected_milling_date}** | Miller:"
+                    f" **{selected_miller_name}** | Milling Qty:"
+                    f" **{batch_qty} kg**"
+                )
 
                 with st.form("update_old_q_form"):
-                    st.write(
-                        f"Updating Quality for Batch ID: {target_m_id} ({t_miller})"
-                    )
+                    st.write("Enter Quality Parameters:")
                     oq_date = str(
                         st.date_input("Lab Test Date", datetime.date.today())
                     )
@@ -501,7 +510,7 @@ elif menu == "2. Milling & Quality Lab Entry":
                     )
 
                     submit_old_q = st.form_submit_button(
-                        "Save Quality for this Old Batch"
+                        "Save Quality for this Batch"
                     )
                     if submit_old_q:
                         conn = get_connection()
@@ -514,7 +523,7 @@ elif menu == "2. Milling & Quality Lab Entry":
                             (
                                 target_m_id,
                                 oq_date,
-                                t_miller,
+                                selected_miller_name,
                                 omoisture,
                                 ogranulation,
                                 occl4,
@@ -547,8 +556,7 @@ elif menu == "3. Finished Goods & Yield":
 
     if df_mil.empty:
         st.warning(
-            "Pehle '2. Milling & Quality Lab Entry' mein entry karein, tabhi"
-            " Finished Goods bhar paayenge."
+            "Please make an entry in '2. Milling & Quality Lab Entry' first."
         )
     else:
         completed_fg_ids = (
@@ -560,8 +568,8 @@ elif menu == "3. Finished Goods & Yield":
 
         if pending_mil.empty:
             st.success(
-                "Sabhi Milling batches ke liye Finished Goods entries ho"
-                " chuki hain!"
+                "Finished Goods entries have been completed for all milling"
+                " batches!"
             )
         else:
             pending_mil["batch_label"] = (
@@ -590,9 +598,9 @@ elif menu == "3. Finished Goods & Yield":
             input_milling_qty = float(selected_row["milling_qty"])
 
             st.info(
-                f"Aap **{miller_name}** ke **{milling_date}** wale milling"
-                f" batch (ID: {selected_milling_id}) ke liye Finished Goods"
-                f" bhar rahe hain (Milling Qty: {input_milling_qty} kg)."
+                f"You are filling Finished Goods for **{miller_name}** on"
+                f" **{milling_date}** (Batch ID: {selected_milling_id} | Milling"
+                f" Qty: {input_milling_qty} kg)."
             )
 
             with st.form("fg_form", clear_on_submit=True):
@@ -806,7 +814,7 @@ elif menu == "5. Daily Dispatch Entry":
                 "Dispatched 2kg Pouches", min_value=0, value=0, step=1
             )
             disp_5kg = st.number_input(
-                "Dispected 5kg Pouches", min_value=0, value=0, step=1
+                "Dispatched 5kg Pouches", min_value=0, value=0, step=1
             )
         cartons_used = st.number_input(
             "Cartons Used", min_value=0, value=0, step=1
@@ -862,12 +870,11 @@ elif menu == "6. Master Records & Export (Admin Controls)":
     st.header("Master Records, Delete/Edit & Data Export Center")
     if user_role != "Admin":
         st.error(
-            "Access Denied! Ye section sirf Admin (Rishabh@1994) ke liye hai."
+            "Access Denied! This section is only for Admin (Rishabh@1994)."
         )
     else:
         st.success(
-            "Welcome Admin! Aap yahan kisi bhi table ka record delete kar"
-            " sakte hain ya data export kar sakte hain."
+            "Welcome Admin! You can view, delete records or export data here."
         )
         tables = [
             "raw_material",
