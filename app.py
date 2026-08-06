@@ -1,4 +1,4 @@
-elif menu == "3. Finished Goods & Yield":
+if menu == "3. Finished Goods & Yield":
     st.header("Finished Goods Production & Yield Tracking")
 
     if "edit_fg_id" not in st.session_state:
@@ -44,7 +44,6 @@ elif menu == "3. Finished Goods & Yield":
 
         if action_type_fg == "➕ New Finished Goods Entry" or st.session_state["edit_fg_id"] is not None:
             
-            # Filter out milling batches that already have finished goods entry (only for New Entry mode)
             if st.session_state["edit_fg_id"] is None and not df_fg_existing.empty and "milling_id" in df_fg_existing.columns:
                 completed_milling_ids = df_fg_existing["milling_id"].tolist()
                 df_mil_available = df_mil[~df_mil["id"].isin(completed_milling_ids)]
@@ -52,10 +51,10 @@ elif menu == "3. Finished Goods & Yield":
                 df_mil_available = df_mil.copy()
 
             if st.session_state["edit_fg_id"] is None and df_mil_available.empty:
-                st.success("🎉 Sabhi milling batches ki Finished Goods entry ki ja chuki hai!")
+                st.success("🎉 Sabhi milling batches की Finished Goods entry ki ja chuki hai!")
             else:
                 if st.session_state["edit_fg_id"] is not None:
-                    df_mil_available = df_mil.copy() # Allow selecting current one during edit
+                    df_mil_available = df_mil.copy()
 
                 df_mil_available["label"] = (
                     "Batch ID: "
