@@ -476,19 +476,14 @@ elif menu == "2. Milling & Quality Lab Entry":
                 target_m_id = int(selected_batch_row["id"])
                 batch_qty = selected_batch_row["milling_qty"]
 
-                # Display batch info clearly in boxes/metrics
+                # Display only unique batch summary (Batch ID & Qty) without repeating date or miller name
                 st.info(
-                    f"Selected Batch Details -> ID: **{target_m_id}** | Date:"
-                    f" **{selected_milling_date}** | Miller:"
-                    f" **{selected_miller_name}** | Milling Qty:"
+                    f"Selected Batch ID: **{target_m_id}** | Milling Qty:"
                     f" **{batch_qty} kg**"
                 )
 
                 with st.form("update_old_q_form"):
                     st.write("Enter Quality Parameters:")
-                    oq_date = str(
-                        st.date_input("Lab Test Date", datetime.date.today())
-                    )
                     omoisture = st.number_input(
                         "Moisture % (Milled)",
                         min_value=0.0,
@@ -513,6 +508,7 @@ elif menu == "2. Milling & Quality Lab Entry":
                         "Save Quality for this Batch"
                     )
                     if submit_old_q:
+                        # Automatically use the selected milling date as lab test date to avoid extra date inputs
                         conn = get_connection()
                         cursor = conn.cursor()
                         cursor.execute(
@@ -522,7 +518,7 @@ elif menu == "2. Milling & Quality Lab Entry":
                         """,
                             (
                                 target_m_id,
-                                oq_date,
+                                selected_milling_date,
                                 selected_miller_name,
                                 omoisture,
                                 ogranulation,
