@@ -171,31 +171,58 @@ if menu == "Month-wise Summary Dashboard":
             "Filter by Miller Name", ["All"] + unique_millers
         )
 
+        # 1. Raw Material Filtered
         f_rm = df_rm.copy()
         if selected_month != "All":
             f_rm = f_rm[f_rm["Month-Year"] == selected_month]
         if selected_miller != "All":
             f_rm = f_rm[f_rm["miller_name"] == selected_miller]
-
         tot_net_rm = f_rm["net_weight"].sum()
 
-        f_mil = load_data("milling")
-        if not f_mil.empty and selected_miller != "All":
-            f_mil = f_mil[f_mil["miller_name"] == selected_miller]
+        # 2. Milling Filtered by Month & Miller
+        df_mil = load_data("milling")
+        if not df_mil.empty:
+            df_mil["Month-Year"] = pd.to_datetime(
+                df_mil["milling_date"]
+            ).dt.strftime("%B %Y")
+        f_mil = df_mil.copy()
+        if not f_mil.empty:
+            if selected_month != "All":
+                f_mil = f_mil[f_mil["Month-Year"] == selected_month]
+            if selected_miller != "All":
+                f_mil = f_mil[f_mil["miller_name"] == selected_miller]
         tot_milled = (
             f_mil["milling_qty"].sum() if not f_mil.empty else 0.0
         )
 
-        f_fg = load_data("finished_goods")
-        if not f_fg.empty and selected_miller != "All":
-            f_fg = f_fg[f_fg["miller_name"] == selected_miller]
+        # 3. Finished Goods Filtered by Month & Miller
+        df_fg = load_data("finished_goods")
+        if not df_fg.empty:
+            df_fg["Month-Year"] = pd.to_datetime(
+                df_fg["production_date"]
+            ).dt.strftime("%B %Y")
+        f_fg = df_fg.copy()
+        if not f_fg.empty:
+            if selected_month != "All":
+                f_fg = f_fg[f_fg["Month-Year"] == selected_month]
+            if selected_miller != "All":
+                f_fg = f_fg[f_fg["miller_name"] == selected_miller]
         tot_finished = (
             f_fg["total_finished_qty"].sum() if not f_fg.empty else 0.0
         )
 
-        f_disp = load_data("dispatch")
-        if not f_disp.empty and selected_miller != "All":
-            f_disp = f_disp[f_disp["miller_name"] == selected_miller]
+        # 4. Dispatch Filtered by Month & Miller
+        df_disp = load_data("dispatch")
+        if not df_disp.empty:
+            df_disp["Month-Year"] = pd.to_datetime(
+                df_disp["dispatch_date"]
+            ).dt.strftime("%B %Y")
+        f_disp = df_disp.copy()
+        if not f_disp.empty:
+            if selected_month != "All":
+                f_disp = f_disp[f_disp["Month-Year"] == selected_month]
+            if selected_miller != "All":
+                f_disp = f_disp[f_disp["miller_name"] == selected_miller]
         tot_dispatched = (
             f_disp["total_dispatched_wt"].sum()
             if not f_disp.empty
@@ -216,7 +243,9 @@ if menu == "Month-wise Summary Dashboard":
         st.divider()
         st.subheader("Raw Material Overview Table")
         st.dataframe(
-            f_rm.drop(columns=["id"]) if "id" in f_rm.columns else f_rm,
+            f_rm.drop(columns=["Month-Year"])
+            if "Month-Year" in f_rm.columns
+            else f_rm,
             use_container_width=True,
         )
 
