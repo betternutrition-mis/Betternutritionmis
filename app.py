@@ -1,4 +1,5 @@
 import datetime
+import os
 import sqlite3
 import pandas as pd
 import streamlit as st
@@ -90,19 +91,17 @@ def init_db():
     """)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS quality (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, milling_id INTEGER, date TEXT, miller_name TEXT, moisture_milled REAL, granulation TEXT, ccl4 TEXT, ash_aia REAL, alcoholic_acidity REAL, gluten TEXT, chapati_sensory TEXT,
-            FOREIGN KEY(milling_id) REFERENCES milling(id)
+            id INTEGER PRIMARY KEY AUTOINCREMENT, milling_id INTEGER, test_date TEXT, miller_name TEXT, moisture_milled REAL, granulation TEXT, ccl4 TEXT, ash_aia REAL, alcoholic_acidity REAL, gluten TEXT, chapati_sensory TEXT
         )
     """)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS finished_goods (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, milling_id INTEGER, production_date TEXT, miller_name TEXT, mfd_date TEXT, expiry_date TEXT, mrp REAL, product_code TEXT, pouch_500g INTEGER, pouch_1kg INTEGER, pouch_2kg INTEGER, pouch_5kg INTEGER, total_finished_qty REAL, bran_qty REAL, bran_pct TEXT, refraction_qty REAL, refraction_pct TEXT, yield_pct TEXT, processing_loss_pct TEXT,
-            FOREIGN KEY(milling_id) REFERENCES milling(id)
+            id INTEGER PRIMARY KEY AUTOINCREMENT, milling_id INTEGER, production_date TEXT, miller_name TEXT, mfd_date TEXT, expiry_date TEXT, mrp REAL, product_code TEXT, pouch_500g INTEGER, pouch_1kg INTEGER, pouch_2kg INTEGER, pouch_5kg INTEGER, total_finished_qty REAL, bran_qty REAL, bran_pct TEXT, refraction_qty REAL, refraction_pct TEXT, yield_pct TEXT, processing_loss_pct TEXT
         )
     """)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS packing_material (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT, miller_name TEXT, carton_type TEXT, cartons_sent INTEGER, tape_sent INTEGER, oxysorb_qty INTEGER, roll_sku TEXT, roll_qty_sent INTEGER
+            id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT, miller_name TEXT, carton_type TEXT, cartons_sent INTEGER, tape_sent INTEGER, oxysorb_qty INTEGER, roll_sku TEXT, roll_qty_sent REAL
         )
     """)
     cursor.execute("""
@@ -119,7 +118,10 @@ init_db()
 
 def load_data(table_name):
     conn = get_connection()
-    df = pd.read_sql(f"SELECT * FROM {table_name}", conn)
+    try:
+        df = pd.read_sql(f"SELECT * FROM {table_name}", conn)
+    except Exception:
+        df = pd.DataFrame()
     conn.close()
     return df
 
@@ -129,12 +131,11 @@ menu = st.sidebar.selectbox(
     [
         "Month-wise Summary Dashboard",
         "1. Raw Material Received",
-        "2. Milling & Processing",
-        "3. Quality Lab Parameters",
-        "4. Finished Goods & Yield",
-        "5. Better Nutrition Packing Material",
-        "6. Daily Dispatch Entry",
-        "7. Master Records & Export (Admin Controls)",
+        "2. Milling & Quality Lab Entry",
+        "3. Finished Goods & Yield",
+        "4. Better Nutrition Packing Material",
+        "5. Daily Dispatch Entry",
+        "6. Master Records & Export (Admin Controls)",
     ],
 )
 
@@ -328,220 +329,576 @@ elif menu == "1. Raw Material Received":
             use_container_width=True,
         )
 
-elif menu == "2. Milling & Processing":
-    st.header("Milling & Processing Entry")
-    miller_name = get_miller_input("milling")
-    with st.form("milling_form", clear_on_submit=True):
-        c1, c2 = st.columns(2)
-        with c1:
-            milling_date = str(
-                st.date_input("Milling Date", datetime.date.today())
+elif menu == "2. Milling & Quality Lab Entry":
+    st.header("Milling Processing & Quality Lab Entry")
+
+    tab_new, tab_update_old = st.tabs(
+        [
+            "➕ New Milling & Quality Entry",
+            "🛠️ Update Quality for Old Milling Batches",
+        ]
+    )
+
+    with tab_new:
+        miller_name = get_miller_input("milling_q")
+        with st.form("milling_quality_form", clear_on_submit=True):
+            st.subheader("1. Milling Parameters")
+            c1, c2 = st.columns(2)
+            with c1:
+                milling_date = str(
+                    st.date_input("Milling Date", datetime.date.today())
+                )
+                milling_qty = st.number_input(
+                    "Milling Quantity (kg)", min_value=0.0, value=0.0, step=10.0
+                )
+            with c2:
+                tempering_time = st.text_input("Tempering Time", value="")
+                tempering_water = st.number_input(
+                    "Tempering Water (Ltr)", min_value=0.0, value=0.0, step=10.0
+                )
+
+            st.divider()
+            st.subheader("2. Quality Lab Parameters")
+            qc1, qc2, qc3 = st.columns(3)
+            with qc1:
+                q_date = str(
+                    st.date_input("Lab Test Date", datetime.date.today())
+                )
+                moisture_milled = st.number_input(
+                    "Moisture % (Milled)",
+                    min_value=0.0,
+                    value=0.0,
+                    step=0.1,
+                )
+                granulation = st.text_input("Granulation", value="")
+            with qc2:
+                ccl4 = st.text_input("CCL4", value="")
+                ash_aia = st.number_input(
+                    "Ash + AIA", min_value=0.0, value=0.0, step=0.01
+                )
+                alcoholic_acidity = st.number_input(
+                    "Alcoholic Acidity", min_value=0.0, value=0.0, step=0.005
+                )
+            with qc3:
+                gluten = st.text_input("Gluten", value="")
+                chapati_sensory = st.selectbox(
+                    "Chapati Sensory",
+                    ["Excellent", "Good", "Average", "Poor"],
+                )
+
+            submit_both = st.form_submit_button(
+                label="Save Milling & Quality Data"
             )
-            milling_qty = st.number_input(
-                "Milling Quantity (kg)", min_value=0.0, value=0.0, step=10.0
-            )
-        with c2:
-            tempering_time = st.text_input("Tempering Time", value="")
-            tempering_water = st.number_input(
-                "Tempering Water (Ltr)", min_value=0.0, value=0.0, step=10.0
-            )
-        submit_mil = st.form_submit_button(
-            label="Save Milling Data & Reset Form"
+            if submit_both:
+                conn = get_connection()
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO milling (milling_date, miller_name, milling_qty, tempering_time, tempering_water)
+                    VALUES (?, ?, ?, ?, ?)
+                """,
+                    (
+                        milling_date,
+                        miller_name,
+                        milling_qty,
+                        tempering_time,
+                        tempering_water,
+                    ),
+                )
+                milling_id = cursor.lastrowid
+                cursor.execute(
+                    """
+                    INSERT INTO quality (milling_id, test_date, miller_name, moisture_milled, granulation, ccl4, ash_aia, alcoholic_acidity, gluten, chapati_sensory)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                    (
+                        milling_id,
+                        q_date,
+                        miller_name,
+                        moisture_milled,
+                        granulation,
+                        ccl4,
+                        ash_aia,
+                        alcoholic_acidity,
+                        gluten,
+                        chapati_sensory,
+                    ),
+                )
+                conn.commit()
+                conn.close()
+                st.success(
+                    f"Milling & Quality Data Successfully Saved for {miller_name}!"
+                )
+                st.rerun()
+
+    with tab_update_old:
+        st.subheader(
+            "Purane Milling Batches Jinme Quality Data Nahi Hai, Unko Update"
+            " Karein"
         )
-        if submit_mil:
-            conn = get_connection()
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                INSERT INTO milling (milling_date, miller_name, milling_qty, tempering_time, tempering_water)
-                VALUES (?, ?, ?, ?, ?)
-            """,
-                (
-                    milling_date,
-                    miller_name,
-                    milling_qty,
-                    tempering_time,
-                    tempering_water,
-                ),
-            )
-            conn.commit()
-            conn.close()
-            st.success(
-                f"Milling Data Saved Permanently with Batch Date {milling_date}"
-                f" for {miller_name}!"
-            )
+        df_mil = load_data("milling")
+        df_q = load_data("quality")
 
-    st.subheader("Saved Milling Entries & Batch IDs")
-    df_mil_saved = load_data("milling")
-    if not df_mil_saved.empty:
-        st.dataframe(
-            df_mil_saved, use_container_width=True
-        )  # ID dikhana zaroori hai batch tracking ke liye
-
-elif menu == "3. Quality Lab Parameters":
-    st.header("Quality Lab Parameters Entry (Linked to Milling Batch)")
-    df_mil = load_data("milling")
-    df_q_saved = load_data("quality")
-
-    if df_mil.empty:
-        st.warning(
-            "Pehle '2. Milling & Processing' mein entry karein, tabhi Quality"
-            " test bhar paayenge."
-        )
-    else:
-        # Filter out milling batches that already have quality test entered
-        completed_milling_ids = (
-            df_q_saved["milling_id"].tolist()
-            if not df_q_saved.empty and "milling_id" in df_q_saved.columns
-            else []
-        )
-        pending_mil = df_mil[~df_mil["id"].isin(completed_milling_ids)]
-
-        if pending_mil.empty:
-            st.success(
-                "Sabhi Milling batches ke liye Quality Lab entries ho chuki"
-                " hain!"
-            )
+        if df_mil.empty:
+            st.info("Koi milling record nahi mila.")
         else:
-            # Create a selection label showing Batch ID, Miller Name, Date, and Qty
-            pending_mil["batch_label"] = (
-                "Batch ID: "
-                + pending_mil["id"].astype(str)
-                + " | Miller: "
-                + pending_mil["miller_name"]
-                + " | Date: "
-                + pending_mil["milling_date"]
-                + " | Qty: "
-                + pending_mil["milling_qty"].astype(str)
-                + " kg"
+            tested_ids = (
+                df_q["milling_id"].tolist()
+                if not df_q.empty and "milling_id" in df_q.columns
+                else []
             )
+            untested_mil = df_mil[~df_mil["id"].isin(tested_ids)]
 
-            selected_batch_label = st.selectbox(
-                "Select Milling Batch for Quality Test",
-                pending_mil["batch_label"].tolist(),
-            )
-            selected_row = pending_mil[
-                pending_mil["batch_label"] == selected_batch_label
-            ].iloc[0]
+            if untested_mil.empty:
+                st.success(
+                    "Sabhi purane milling batches ki quality entry pehle se ho"
+                    " chuki hai!"
+                )
+            else:
+                untested_mil["label"] = (
+                    "Batch ID: "
+                    + untested_mil["id"].astype(str)
+                    + " | Miller: "
+                    + untested_mil["miller_name"]
+                    + " | Date: "
+                    + untested_mil["milling_date"]
+                    + " | Qty: "
+                    + untested_mil["milling_qty"].astype(str)
+                    + " kg"
+                )
+                sel_batch = st.selectbox(
+                    "Select Untested Milling Batch", untested_mil["label"].tolist()
+                )
+                sel_row = untested_mil[
+                    untested_mil["label"] == sel_batch
+                ].iloc[0]
+                target_m_id = int(sel_row["id"])
+                t_miller = sel_row["miller_name"]
 
-            selected_milling_id = int(selected_row["id"])
-            miller_name = selected_row["miller_name"]
-            milling_date = selected_row["milling_date"]
-
-            st.info(
-                f"Aap **{miller_name}** ke **{milling_date}** wale milling"
-                " batch (ID: {selected_milling_id}) ke liye Quality details"
-                " bhar rahe hain."
-            )
-
-            with st.form("quality_form", clear_on_submit=True):
-                c1, c2, c3 = st.columns(3)
-                with c1:
-                    q_date = str(
+                with st.form("update_old_q_form"):
+                    st.write(
+                        f"Updating Quality for Batch ID: {target_m_id} ({t_miller})"
+                    )
+                    oq_date = str(
                         st.date_input("Lab Test Date", datetime.date.today())
                     )
-                    moisture_milled = st.number_input(
+                    omoisture = st.number_input(
                         "Moisture % (Milled)",
                         min_value=0.0,
                         value=0.0,
                         step=0.1,
                     )
-                    granulation = st.text_input("Granulation", value="")
-                with c2:
-                    ccl4 = st.text_input("CCL4", value="")
-                    ash_aia = st.number_input(
+                    ogranulation = st.text_input("Granulation", value="")
+                    occl4 = st.text_input("CCL4", value="")
+                    oash = st.number_input(
                         "Ash + AIA", min_value=0.0, value=0.0, step=0.01
                     )
-                    alcoholic_acidity = st.number_input(
+                    oacidity = st.number_input(
                         "Alcoholic Acidity", min_value=0.0, value=0.0, step=0.005
                     )
-                with c3:
-                    gluten = st.text_input("Gluten", value="")
-                    chapati_sensory = st.selectbox(
+                    ogluten = st.text_input("Gluten", value="")
+                    osensory = st.selectbox(
                         "Chapati Sensory",
                         ["Excellent", "Good", "Average", "Poor"],
                     )
-                submit_q = st.form_submit_button(
-                    label="Save Quality Data & Reset Form"
-                )
-                if submit_q:
-                    conn = get_connection()
-                    cursor = conn.cursor()
-                    cursor.execute(
-                        """
-                        INSERT INTO quality (milling_id, date, miller_name, moisture_milled, granulation, ccl4, ash_aia, alcoholic_acidity, gluten, chapati_sensory)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                        (
-                            selected_milling_id,
-                            q_date,
-                            miller_name,
-                            moisture_milled,
-                            granulation,
-                            ccl4,
-                            ash_aia,
-                            alcoholic_acidity,
-                            gluten,
-                            chapati_sensory,
-                        ),
+
+                    submit_old_q = st.form_submit_button(
+                        "Save Quality for this Old Batch"
                     )
-                    conn.commit()
-                    conn.close()
-                    st.success(
-                        "Quality Test Parameters Saved Permanently for this"
-                        " Batch!"
-                    )
-                    st.rerun()
+                    if submit_old_q:
+                        conn = get_connection()
+                        cursor = conn.cursor()
+                        cursor.execute(
+                            """
+                            INSERT INTO quality (milling_id, test_date, miller_name, moisture_milled, granulation, ccl4, ash_aia, alcoholic_acidity, gluten, chapati_sensory)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                            (
+                                target_m_id,
+                                oq_date,
+                                t_miller,
+                                omoisture,
+                                ogranulation,
+                                occl4,
+                                oash,
+                                oacidity,
+                                ogluten,
+                                osensory,
+                            ),
+                        )
+                        conn.commit()
+                        conn.close()
+                        st.success(
+                            f"Quality successfully added for Batch ID"
+                            f" {target_m_id}!"
+                        )
+                        st.rerun()
+
+    st.subheader("Saved Milling Records")
+    df_mil_saved = load_data("milling")
+    if not df_mil_saved.empty:
+        st.dataframe(
+            df_mil_saved.drop(columns=["id"])
+            if "id" in df_mil_saved.columns
+            else df_mil_saved,
+            use_container_width=True,
+        )
 
     st.subheader("Saved Quality Lab Records")
+    df_q_saved = load_data("quality")
     if not df_q_saved.empty:
         st.dataframe(
-            df_q_saved.drop(columns=["id"])
+            df_q_saved.drop(columns=["id", "milling_id"])
             if "id" in df_q_saved.columns
             else df_q_saved,
             use_container_width=True,
         )
 
-elif menu == "4. Finished Goods & Yield":
-    st.header(
-        "Finished Goods, SKU Pouches & Yield Calculation (Linked to Milling"
-        " Batch)"
-    )
+elif menu == "3. Finished Goods & Yield":
+    st.header("Finished Goods Production & Yield Tracking")
     df_mil = load_data("milling")
-    df_fg_saved = load_data("finished_goods")
-
     if df_mil.empty:
         st.warning(
-            "Pehle '2. Milling & Processing' mein entry karein, tabhi Finished"
-            " Goods bhar paayenge."
+            "Pehle Menu 2 se Milling entry karein, tabhi Finished Goods entry"
+            " ho sakegi."
         )
     else:
-        # Filter out milling batches that already have Finished Goods entered
-        completed_fg_ids = (
-            df_fg_saved["milling_id"].tolist()
-            if not df_fg_saved.empty and "milling_id" in df_fg_saved.columns
-            else []
+        df_mil["label"] = (
+            "ID: "
+            + df_mil["id"].astype(str)
+            + " | Miller: "
+            + df_mil["miller_name"]
+            + " | Date: "
+            + df_mil["milling_date"]
+            + " | Qty: "
+            + df_mil["milling_qty"].astype(str)
+            + " kg"
         )
-        pending_mil = df_mil[~df_mil["id"].isin(completed_fg_ids)]
+        sel_milling = st.selectbox(
+            "Select Milling Batch for Finished Goods", df_mil["label"].tolist()
+        )
+        row_mil = df_mil[df_mil["label"] == sel_milling].iloc[0]
+        milling_id = int(row_mil["id"])
+        miller_name = row_mil["miller_name"]
+        milling_qty = float(row_mil["milling_qty"])
 
-        if pending_mil.empty:
+        with st.form("fg_form", clear_on_submit=True):
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                production_date = str(
+                    st.date_input("Production Date", datetime.date.today())
+                )
+                mfd_date = st.text_input("MFD Date", placeholder="e.g. June 2026")
+                expiry_date = st.text_input(
+                    "Expiry Date", placeholder="e.g. 6 Months"
+                )
+            with c2:
+                mrp = st.number_input("MRP (Rs)", min_value=0.0, value=0.0)
+                product_code = st.text_input(
+                    "Product Code / SKU", value="BN-ATTA-01"
+                )
+                pouch_500g = st.number_input(
+                    "500g Pouches Count", min_value=0, value=0, step=1
+                )
+            with c3:
+                pouch_1kg = st.number_input(
+                    "1kg Pouches Count", min_value=0, value=0, step=1
+                )
+                pouch_2kg = st.number_input(
+                    "2kg Pouches Count", min_value=0, value=0, step=1
+                )
+                pouch_5kg = st.number_input(
+                    "5kg Pouches Count", min_value=0, value=0, step=1
+                )
+
+            st.divider()
+            sc1, sc2 = st.columns(2)
+            with sc1:
+                bran_qty = st.number_input(
+                    "Bran Quantity (kg)", min_value=0.0, value=0.0, step=1.0
+                )
+            with sc2:
+                refraction_qty = st.number_input(
+                    "Refraction Quantity (kg)",
+                    min_value=0.0,
+                    value=0.0,
+                    step=1.0,
+                )
+
+            submit_fg = st.form_submit_button(
+                label="Calculate Yield & Save Finished Goods"
+            )
+            if submit_fg:
+                wt_500g = pouch_500g * 0.5
+                wt_1kg = pouch_1kg * 1.0
+                wt_2kg = pouch_2kg * 2.0
+                wt_5kg = pouch_5kg * 5.0
+                total_finished_qty = wt_500g + wt_1kg + wt_2kg + wt_5kg
+
+                bran_pct = (
+                    (bran_qty / milling_qty) * 100 if milling_qty > 0 else 0.0
+                )
+                refraction_pct = (
+                    (refraction_qty / milling_qty) * 100
+                    if milling_qty > 0
+                    else 0.0
+                )
+                yield_pct = (
+                    (total_finished_qty / milling_qty) * 100
+                    if milling_qty > 0
+                    else 0.0
+                )
+
+                total_accounted = (
+                    total_finished_qty + bran_qty + refraction_qty
+                )
+                processing_loss_qty = milling_qty - total_accounted
+                processing_loss_pct = (
+                    (processing_loss_qty / milling_qty) * 100
+                    if milling_qty > 0
+                    else 0.0
+                )
+
+                conn = get_connection()
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO finished_goods (milling_id, production_date, miller_name, mfd_date, expiry_date, mrp, product_code, pouch_500g, pouch_1kg, pouch_2kg, pouch_5kg, total_finished_qty, bran_qty, bran_pct, refraction_qty, refraction_pct, yield_pct, processing_loss_pct)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                    (
+                        milling_id,
+                        production_date,
+                        miller_name,
+                        mfd_date,
+                        expiry_date,
+                        mrp,
+                        product_code,
+                        pouch_500g,
+                        pouch_1kg,
+                        pouch_2kg,
+                        pouch_5kg,
+                        round(total_finished_qty, 2),
+                        bran_qty,
+                        f"{bran_pct:.2f}%",
+                        refraction_qty,
+                        f"{refraction_pct:.2f}%",
+                        f"{yield_pct:.2f}%",
+                        f"{processing_loss_pct:.2f}%",
+                    ),
+                )
+                conn.commit()
+                conn.close()
+                st.success(
+                    f"Finished Goods Saved! Total Finished Output:"
+                    f" {total_finished_qty:,.2f} kg | Yield:"
+                    f" {yield_pct:.2f}%"
+                )
+
+    st.subheader("Saved Finished Goods Records")
+    df_fg_saved = load_data("finished_goods")
+    if not df_fg_saved.empty:
+        st.dataframe(
+            df_fg_saved.drop(columns=["id", "milling_id"])
+            if "id" in df_fg_saved.columns
+            else df_fg_saved,
+            use_container_width=True,
+        )
+
+elif menu == "4. Better Nutrition Packing Material":
+    st.header("Better Nutrition Packing Material Dispatch/Stock Entry")
+    miller_name = get_miller_input("pm")
+    with st.form("pm_form", clear_on_submit=True):
+        c1, c2 = st.columns(2)
+        with c1:
+            pm_date = str(st.date_input("Date", datetime.date.today()))
+            carton_type = st.selectbox(
+                "Carton Type", ["500g Carton", "1kg Carton", "2kg Carton", "5kg Carton"]
+            )
+            cartons_sent = st.number_input(
+                "Cartons Sent (Units)", min_value=0, value=0, step=1
+            )
+            tape_sent = st.number_input(
+                "Tape Sent (Rolls)", min_value=0, value=0, step=1
+            )
+        with c2:
+            oxysorb_qty = st.number_input(
+                "Oxysorb Packets Qty", min_value=0, value=0, step=10
+            )
+            roll_sku = st.text_input("Roll SKU / Description", value="")
+            roll_qty_sent = st.number_input(
+                "Roll Qty Sent (kg or meters)",
+                min_value=0.0,
+                value=0.0,
+                step=1.0,
+            )
+
+        submit_pm = st.form_submit_button(
+            label="Save Packing Material Entry"
+        )
+        if submit_pm:
+            conn = get_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO packing_material (date, miller_name, carton_type, cartons_sent, tape_sent, oxysorb_qty, roll_sku, roll_qty_sent)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+                (
+                    pm_date,
+                    miller_name,
+                    carton_type,
+                    cartons_sent,
+                    tape_sent,
+                    oxysorb_qty,
+                    roll_sku,
+                    roll_qty_sent,
+                ),
+            )
+            conn.commit()
+            conn.close()
             st.success(
-                "Sabhi Milling batches ke liye Finished Goods entries ho"
-                " chuki hain!"
-            )
-        else:
-            pending_mil["batch_label"] = (
-                "Batch ID: "
-                + pending_mil["id"].astype(str)
-                + " | Miller: "
-                + pending_mil["miller_name"]
-                + " | Date: "
-                + pending_mil["milling_date"]
-                + " | Qty: "
-                + pending_mil["milling_qty"].astype(str)
-                + " kg"
+                f"Packing Material entry successfully saved for {miller_name}!"
             )
 
-            selected_batch_label = st.selectbox(
-                "Select Milling Batch for Finished Goods",
-                pending_mil["batch_label"].
+    st.subheader("Saved Packing Material Records")
+    df_pm_saved = load_data("packing_material")
+    if not df_pm_saved.empty:
+        st.dataframe(
+            df_pm_saved.drop(columns=["id"])
+            if "id" in df_pm_saved.columns
+            else df_pm_saved,
+            use_container_width=True,
+        )
+
+elif menu == "5. Daily Dispatch Entry":
+    st.header("Daily Finished Goods Dispatch Entry")
+    miller_name = get_miller_input("dispatch")
+    with st.form("dispatch_form", clear_on_submit=True):
+        c1, c2 = st.columns(2)
+        with c1:
+            dispatch_date = str(
+                st.date_input("Dispatch Date", datetime.date.today())
+            )
+            vehicle_no = st.text_input(
+                "Vehicle Number", placeholder="e.g. UP-32-XZ-1234"
+            )
+            disp_500g = st.number_input(
+                "Dispatched 500g Pouches", min_value=0, value=0, step=1
+            )
+            disp_1kg = st.number_input(
+                "Dispatched 1kg Pouches", min_value=0, value=0, step=1
+            )
+        with c2:
+            disp_2kg = st.number_input(
+                "Dispatched 2kg Pouches", min_value=0, value=0, step=1
+            )
+            disp_5kg = st.number_input(
+                "Dispatched 5kg Pouches", min_value=0, value=0, step=1
+            )
+            cartons_used = st.number_input(
+                "Cartons Used", min_value=0, value=0, step=1
+            )
+            remarks = st.text_input("Dispatch Remarks / Destination", value="")
+
+        submit_disp = st.form_submit_button(
+            label="Save Dispatch Entry"
+        )
+        if submit_disp:
+            total_disp_wt = (
+                (disp_500g * 0.5)
+                + (disp_1kg * 1.0)
+                + (disp_2kg * 2.0)
+                + (disp_5kg * 5.0)
+            )
+            conn = get_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO dispatch (dispatch_date, miller_name, vehicle_no, disp_500g, disp_1kg, disp_2kg, disp_5kg, total_dispatched_wt, cartons_used, remarks)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+                (
+                    dispatch_date,
+                    miller_name,
+                    vehicle_no,
+                    disp_500g,
+                    disp_1kg,
+                    disp_2kg,
+                    disp_5kg,
+                    round(total_disp_wt, 2),
+                    cartons_used,
+                    remarks,
+                ),
+            )
+            conn.commit()
+            conn.close()
+            st.success(
+                f"Dispatch Saved Successfully! Total Dispatched Weight:"
+                f" {total_disp_wt:,.2f} kg"
+            )
+
+    st.subheader("Saved Dispatch Records")
+    df_disp_saved = load_data("dispatch")
+    if not df_disp_saved.empty:
+        st.dataframe(
+            df_disp_saved.drop(columns=["id"])
+            if "id" in df_disp_saved.columns
+            else df_disp_saved,
+            use_container_width=True,
+        )
+
+elif menu == "6. Master Records & Export (Admin Controls)":
+    st.header("Master Records, Data Management & Admin Controls")
+
+    if user_role != "Admin":
+        st.warning(
+            "⚠️ Ye section sirf **Admin** access ke liye hai. Aapka current role"
+            f" '{user_role}' hai."
+        )
+    else:
+        st.success(
+            "🔓 Admin privileges active. Aap tables view kar sakte hain aur data"
+            " export/delete kar sakte hain."
+        )
+
+        table_to_manage = st.selectbox(
+            "Select Database Table to Manage",
+            [
+                "raw_material",
+                "milling",
+                "quality",
+                "finished_goods",
+                "packing_material",
+                "dispatch",
+            ],
+        )
+
+        df_manage = load_data(table_to_manage)
+        st.write(f"### Current Data in `{table_to_manage}`")
+        if df_manage.empty:
+            st.info("Table khaali hai.")
+        else:
+            st.dataframe(df_manage, use_container_width=True)
+
+            # CSV Download Button
+            csv_data = df_manage.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                label=f"📥 Download `{table_to_manage}` as CSV",
+                data=csv_data,
+                file_name=f"{table_to_manage}_export.csv",
+                mime="text/csv",
+            )
+
+        st.divider()
+        st.subheader("Danger Zone / Database Maintenance")
+        if st.button("🗑️ Delete Database File (Reset Everything)"):
+            if os.path.exists("flour_mill_erp.db"):
+                os.remove("flour_mill_erp.db")
+                st.warning(
+                    "Database file delete ho chuki hai. App ko refresh karein"
+                    " naye tables banane ke liye."
+                )
+                st.rerun()
+            else:
+                st.error("Database file nahi mili.")
