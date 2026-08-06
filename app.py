@@ -91,7 +91,7 @@ def init_db():
     """)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS quality (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, milling_id INTEGER, date TEXT, miller_name TEXT, moisture_milled REAL, granulation TEXT, ccl4 TEXT, ash_aia REAL, alcoholic_acidity REAL, gluten TEXT, chapati_sensory TEXT
+            id INTEGER PRIMARY KEY AUTOINCREMENT, milling_id INTEGER, test_date TEXT, miller_name TEXT, moisture_milled REAL, granulation TEXT, ccl4 TEXT, ash_aia REAL, alcoholic_acidity REAL, gluten TEXT, chapati_sensory TEXT
         )
     """)
     cursor.execute("""
@@ -408,7 +408,7 @@ elif menu == "2. Milling & Quality Lab Entry":
                 milling_id = cursor.lastrowid
                 cursor.execute(
                     """
-                    INSERT INTO quality (milling_id, date, miller_name, moisture_milled, granulation, ccl4, ash_aia, alcoholic_acidity, gluten, chapati_sensory)
+                    INSERT INTO quality (milling_id, test_date, miller_name, moisture_milled, granulation, ccl4, ash_aia, alcoholic_acidity, gluten, chapati_sensory)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                     (
@@ -510,7 +510,7 @@ elif menu == "2. Milling & Quality Lab Entry":
                         cursor = conn.cursor()
                         cursor.execute(
                             """
-                            INSERT INTO quality (milling_id, date, miller_name, moisture_milled, granulation, ccl4, ash_aia, alcoholic_acidity, gluten, chapati_sensory)
+                            INSERT INTO quality (milling_id, test_date, miller_name, moisture_milled, granulation, ccl4, ash_aia, alcoholic_acidity, gluten, chapati_sensory)
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                             (
@@ -872,7 +872,6 @@ elif menu == "6. Master Records & Export (Admin Controls)":
             " sakte hain ya data export kar sakte hain."
         )
 
-        # Admin tool to completely reset/fix DB if corrupted
         if st.button("⚠️ Reset/Recreate Database Tables (Fix Schema Errors)"):
             try:
                 os.remove("flour_mill_erp.db")
