@@ -283,7 +283,7 @@ elif menu == "1. Raw Material Received":
 
     if not df_rm_saved.empty:
         action_type = st.radio(
-            "Action Mode", ["➕ New Entry", "✏️ Edit / 🗑️ Delete Existing Entry"], horizontal=True, key="mode_rm"
+            "Action Mode", ["➕ New Entry", "✏️ Edit / 🗑️ Delete Existing Entry"], horizontal=True
         )
     else:
         action_type = "➕ New Entry"
@@ -302,15 +302,15 @@ elif menu == "1. Raw Material Received":
             + " kg"
         )
         selected_row_label = st.selectbox(
-            "Select Raw Material Record to Modify/Delete", df_rm_saved["label"].tolist(), key="sel_rm_edit"
+            "Select Raw Material Record to Modify/Delete", df_rm_saved["label"].tolist()
         )
         selected_row = df_rm_saved[df_rm_saved["label"] == selected_row_label].iloc[0]
         st.session_state["edit_rm_id"] = int(selected_row["id"])
         edit_data = selected_row
 
-        with st.expander("⚠️ Delete Confirmation Box", expanded=False):
+        with st.expander("⚠️ Delete Confirmation Box", expanded=True):
             confirm_del = st.checkbox("Haan, main is record ko permanently delete karna chahta hoon", key="conf_del_rm")
-            if st.button("🗑️ Confirm & Delete Record", type="primary", key="btn_del_rm_rec"):
+            if st.button("🗑️ Confirm & Delete Record", type="primary"):
                 if confirm_del:
                     conn = get_connection()
                     cursor = conn.cursor()
@@ -491,725 +491,692 @@ elif menu == "1. Raw Material Received":
 elif menu == "2. Milling & Quality Lab Entry":
     st.header("Milling Processing & Quality Lab Entry")
 
-    if "edit_mil_id" not in st.session_state:
-        st.session_state["edit_mil_id"] = None
+    tab_new, tab_update_old = st.tabs(
+        [
+            "➕ New Milling & Quality Entry",
+            "🛠️ Update Quality for Old Milling Batches",
+        ]
+    )
 
+    with tab_new:
+        miller_name = get_miller_input("milling_q")
+        with st.form("milling_quality_form", clear_on_submit=True):
+            st.subheader("1. Milling Parameters")
+            c1, c2 = st.columns(2)
+            with c1:
+                mil_date_obj = st.date_input("Milling Date", datetime.date.today())
+                milling_date = mil_date_obj.strftime("%d %b %Y")
+                milling_qty = st.number_input(
+                    "Milling Quantity (kg)", value=None, placeholder="Type qty...", step=10.0
+                )
+            with c2:
+                tempering_time = st.text_input("Tempering Time", value="")
+                tempering_water = st.number_input(
+                    "Tempering Water (Ltr)", value=None, placeholder="Type water...", step=10.0
+                )
+
+            st.divider()
+            st.subheader("2. Quality Lab Parameters")
+            qc1, qc2, qc3 = st.columns(3)
+            with qc1:
+                q_date_obj = st.date_input("Lab Test Date", datetime.date.today())
+                q_date = q_date_obj.strftime("%d %b %Y")
+                moisture_milled = st.number_input(
+                    "Moisture % (Milled)",
+                    value=None,
+                    placeholder="Type moisture...",
+                    step=0.1,
+                )
+                granulation = st.text_input("Granulation", value="")
+            with qc2:
+                ccl4 = st.text_input("CCL4", value="")
+                ash_aia = st.number_input(
+                    "Ash + AIA", value=None, placeholder="Type ash...", step=0.01, format="%.3f"
+                )
+                alcoholic_acidity = st.number_input(
+                    "Alcoholic Acidity", value=None, placeholder="Type acidity...", step=0.001, format="%.4f"
+                )
+            with qc3:
+                wap = st.number_input(
+                    "WAP", value=None, placeholder="Type WAP...", step=0.01, format="%.2f"
+                )
+                gluten = st.text_input("Gluten", value="")
+                chapati_sensory = st.selectbox(
+                    "Chapati Sensory",
+                    ["Excellent", "Good", "Average", "Poor"],
+                )
+
+            submit_both = st.form_submit_button(
+                label="Save Milling & Quality Data"
+            )
+            if submit_both:
+                final_mil_qty = milling_qty if milling_qty is not None else 0.0
+                final_temp_water = tempering_water if tempering_water is not None else 0.0
+                final_mois_milled = moisture_milled if moisture_milled is not None else 0.0
+                final_ash = ash_aia if ash_aia is not None else 0.0
+                final_acidity = alcoholic_acidity if alcoholic_acidity is not None else 0.0
+                final_wap = wap if wap is not None else 0.0
+
+                conn = get_connection()
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO milling (milling_date, miller_name, milling_qty, tempering_time, tempering_water)
+                    VALUES (?, ?, ?, ?, ?)
+                """,
+                    (
+                        milling_date,
+                        miller_name,
+                        final_mil_qty,
+                        tempering_time,
+                        final_temp_water,
+                    ),
+                )
+                milling_id = cursor.lastrowid
+                cursor.execute(
+                    """
+                    INSERT INTO quality (milling_id, test_date, miller_name, moisture_milled, granulation, ccl4, ash_aia, alcoholic_acidity, wap, gluten, chapati_sensory)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                    (
+                        milling_id,
+                        q_date,
+                        miller_name,
+                        final_mois_milled,
+                        granulation,
+                        ccl4,
+                        final_ash,
+                        final_acidity,
+                        final_wap,
+                        gluten,
+                        chapati_sensory,
+                    ),
+                )
+                conn.commit()
+                conn.close()
+                st.success(
+                    f"Milling & Quality Data Successfully Saved for {miller_name}!"
+                )
+                st.rerun()
+
+    with tab_update_old:
+        st.subheader(
+            "Purane Milling Batches Jinme Quality Data Nahi Hai, Unko Update"
+            " Karein"
+        )
+        df_mil = load_data("milling")
+        df_q = load_data("quality")
+
+        if df_mil.empty:
+            st.info("Koi milling record nahi mila.")
+        else:
+            tested_ids = (
+                df_q["milling_id"].tolist()
+                if not df_q.empty and "milling_id" in df_q.columns
+                else []
+            )
+            untested_mil = df_mil[~df_mil["id"].isin(tested_ids)]
+
+            if untested_mil.empty:
+                st.success(
+                    "Sabhi purane milling batches ki quality entry pehle se ho"
+                    " chuki hai!"
+                )
+            else:
+                untested_mil["label"] = (
+                    untested_mil["miller_name"]
+                    + " ("
+                    + untested_mil["milling_date"]
+                    + ")"
+                )
+                sel_batch = st.selectbox(
+                    "Select Milling Batch (Miller & Date)", untested_mil["label"].tolist()
+                )
+                sel_row = untested_mil[
+                    untested_mil["label"] == sel_batch
+                ].iloc[0]
+                target_m_id = int(sel_row["id"])
+                t_miller = sel_row["miller_name"]
+
+                with st.form("update_old_q_form"):
+                    st.write(
+                        f"Updating Quality for Batch ID: {target_m_id} ({t_miller})"
+                    )
+                    oq_date_obj = st.date_input("Lab Test Date", datetime.date.today())
+                    oq_date = oq_date_obj.strftime("%d %b %Y")
+                    omoisture = st.number_input(
+                        "Moisture % (Milled)",
+                        value=None,
+                        placeholder="Type moisture...",
+                        step=0.1,
+                    )
+                    ogranulation = st.text_input("Granulation", value="")
+                    occl4 = st.text_input("CCL4", value="")
+                    oash = st.number_input(
+                        "Ash + AIA", value=None, placeholder="Type ash...", step=0.01, format="%.3f"
+                    )
+                    oacidity = st.number_input(
+                        "Alcoholic Acidity", value=None, placeholder="Type acidity...", step=0.001, format="%.4f"
+                    )
+                    owap = st.number_input(
+                        "WAP", value=None, placeholder="Type WAP...", step=0.01, format="%.2f"
+                    )
+                    ogluten = st.text_input("Gluten", value="")
+                    osensory = st.selectbox(
+                        "Chapati Sensory",
+                        ["Excellent", "Good", "Average", "Poor"],
+                    )
+
+                    submit_old_q = st.form_submit_button(
+                        "Save Quality for this Old Batch"
+                    )
+                    if submit_old_q:
+                        final_omoisture = omoisture if omoisture is not None else 0.0
+                        final_oash = oash if oash is not None else 0.0
+                        final_oacidity = oacidity if oacidity is not None else 0.0
+                        final_owap = owap if owap is not None else 0.0
+
+                        conn = get_connection()
+                        cursor = conn.cursor()
+                        cursor.execute(
+                            """
+                            INSERT INTO quality (milling_id, test_date, miller_name, moisture_milled, granulation, ccl4, ash_aia, alcoholic_acidity, wap, gluten, chapati_sensory)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                            (
+                                target_m_id,
+                                oq_date,
+                                t_miller,
+                                final_omoisture,
+                                ogranulation,
+                                occl4,
+                                final_oash,
+                                final_oacidity,
+                                final_owap,
+                                ogluten,
+                                osensory,
+                            ),
+                        )
+                        conn.commit()
+                        conn.close()
+                        st.success(
+                            f"Quality successfully added for Batch ID"
+                            f" {target_m_id}!"
+                        )
+                        st.rerun()
+
+    st.subheader("Saved Milling Records & Deletion Controls")
     df_mil_saved = load_data("milling")
-
-    action_type_mil = "➕ New Milling & Quality Entry"
     if not df_mil_saved.empty:
-        action_type_mil = st.radio(
-            "Action Mode", ["➕ New Milling & Quality Entry", "✏️ Edit / 🗑️ Delete Existing Milling", "🛠️ Update Quality for Old Batches"], horizontal=True, key="mode_mil"
-        )
-    else:
-        action_type_mil = st.radio(
-            "Action Mode", ["➕ New Milling & Quality Entry", "🛠️ Update Quality for Old Batches"], horizontal=True, key="mode_mil_empty"
-        )
-
-    edit_mil_data = None
-    if action_type_mil == "✏️ Edit / 🗑️ Delete Existing Milling" and not df_mil_saved.empty:
         df_mil_saved["label"] = (
-            "ID: " + df_mil_saved["id"].astype(str) + " | " + df_mil_saved["miller_name"] + " (" + df_mil_saved["milling_date"] + ")"
+            df_mil_saved["miller_name"]
+            + " ("
+            + df_mil_saved["milling_date"]
+            + ")"
         )
-        sel_edit_mil = st.selectbox("Select Milling Record to Modify/Delete", df_mil_saved["label"].tolist(), key="sel_edit_mil")
-        selected_mil_row = df_mil_saved[df_mil_saved["label"] == sel_edit_mil].iloc[0]
-        st.session_state["edit_mil_id"] = int(selected_mil_row["id"])
-        edit_mil_data = selected_mil_row
-
-        with st.expander("⚠️ Delete Confirmation Box (Milling)", expanded=False):
-            confirm_del_mil = st.checkbox("Haan, main is milling record ko permanently delete karna chahta hoon", key="conf_del_mil")
-            if st.button("🗑️ Confirm & Delete Milling Record", type="primary", key="btn_del_mil_rec"):
+        del_mil_label = st.selectbox("Select Milling Record to Delete", [None] + df_mil_saved["label"].tolist(), key="del_mil")
+        if del_mil_label is not None:
+            del_row_item = df_mil_saved[df_mil_saved["label"] == del_mil_label].iloc[0]
+            del_mil_id = int(del_row_item["id"])
+            confirm_del_mil = st.checkbox("Haan, main is milling record ko delete karna chahta hoon", key="conf_mil")
+            if st.button("🗑️ Confirm & Delete Milling Record", key="btn_del_mil"):
                 if confirm_del_mil:
                     conn = get_connection()
                     cursor = conn.cursor()
-                    cursor.execute("DELETE FROM milling WHERE id = ?", (st.session_state["edit_mil_id"],))
-                    cursor.execute("DELETE FROM quality WHERE milling_id = ?", (st.session_state["edit_mil_id"],))
+                    cursor.execute("DELETE FROM milling WHERE id = ?", (del_mil_id,))
+                    cursor.execute("DELETE FROM quality WHERE milling_id = ?", (del_mil_id,))
                     conn.commit()
                     conn.close()
-                    st.success(f"Milling & Quality Record ID {st.session_state['edit_mil_id']} deleted successfully!")
-                    st.session_state["edit_mil_id"] = None
+                    st.success(f"Milling Record deleted successfully!")
                     st.rerun()
                 else:
                     st.error("Pehle confirmation checkbox par tick karein!")
-    elif action_type_mil == "🛠️ Update Quality for Old Batches":
-        st.subheader("Update/Add Quality Parameters for Existing Milling Batches")
-        if df_mil_saved.empty:
-            st.warning("Koi milling batch available nahi hai.")
-        else:
-            df_mil_saved["label"] = (
-                "ID: " + df_mil_saved["id"].astype(str) + " | " + df_mil_saved["miller_name"] + " (" + df_mil_saved["milling_date"] + ")"
-            )
-            sel_q_batch = st.selectbox("Select Milling Batch for Quality", df_mil_saved["label"].tolist(), key="sel_q_batch_old")
-            q_row = df_mil_saved[df_mil_saved["label"] == sel_q_batch].iloc[0]
-            q_milling_id = int(q_row["id"])
-            q_miller = q_row["miller_name"]
 
-            df_q_existing = load_data("quality")
-            q_match = df_q_existing[df_q_existing["milling_id"] == q_milling_id]
-            q_exist_data = q_match.iloc[0] if not q_match.empty else None
-
-            with st.form("old_quality_form"):
-                st.write(f"**Quality Lab Test Entry for Batch ID:** {q_milling_id} ({q_miller})")
-                c1, c2, c3 = st.columns(3)
-                with c1:
-                    q_date_val = datetime.date.today()
-                    if q_exist_data is not None and pd.notna(q_exist_data["test_date"]):
-                        try:
-                            q_date_val = datetime.datetime.strptime(q_exist_data["test_date"], "%d %b %Y").date()
-                        except Exception:
-                            pass
-                    test_date = st.date_input("Lab Test Date", value=q_date_val, key="old_tdate").strftime("%d %b %Y")
-
-                    def_mo_milled = float(q_exist_data["moisture_milled"]) if q_exist_data is not None and pd.notna(q_exist_data["moisture_milled"]) else 0.0
-                    moisture_milled = st.number_input("Moisture % (Milled/Atta)", min_value=0.0, value=def_mo_milled, step=0.1, format="%.1f", key="old_mo_milled")
-
-                    def_gran = str(q_exist_data["granulation"]) if q_exist_data is not None and pd.notna(q_exist_data["granulation"]) else ""
-                    granulation = st.text_input("Granulation / Fineness", value=def_gran, placeholder="e.g. Fine / 95% through 150 mesh", key="old_gran")
-
-                with c2:
-                    def_ccl4 = str(q_exist_data["ccl4"]) if q_exist_data is not None and pd.notna(q_exist_data["ccl4"]) else ""
-                    ccl4 = st.text_input("CCL4 Test", value=def_ccl4, placeholder="e.g. Sound / Clean", key="old_ccl4")
-
-                    def_ash = float(q_exist_data["ash_aia"]) if q_exist_data is not None and pd.notna(q_exist_data["ash_aia"]) else 0.0
-                    ash_aia = st.number_input("Ash / AIA %", min_value=0.0, value=def_ash, step=0.01, format="%.2f", key="old_ash")
-
-                    def_aa = float(q_exist_data["alcoholic_acidity"]) if q_exist_data is not None and pd.notna(q_exist_data["alcoholic_acidity"]) else 0.0
-                    alcoholic_acidity = st.number_input("Alcoholic Acidity", min_value=0.0, value=def_aa, step=0.01, format="%.2f", key="old_aa")
-
-                with c3:
-                    def_wap = float(q_exist_data["wap"]) if q_exist_data is not None and "wap" in q_exist_data and pd.notna(q_exist_data["wap"]) else 0.0
-                    wap = st.number_input("WAP (Water Absorption / Wapsi)", min_value=0.0, value=def_wap, step=0.1, format="%.1f", key="old_wap")
-
-                    def_gluten = str(q_exist_data["gluten"]) if q_exist_data is not None and pd.notna(q_exist_data["gluten"]) else ""
-                    gluten = st.text_input("Gluten %", value=def_gluten, placeholder="e.g. 9.5%", key="old_gluten")
-
-                    def_chapati = str(q_exist_data["chapati_sensory"]) if q_exist_data is not None and pd.notna(q_exist_data["chapati_sensory"]) else ""
-                    chapati_sensory = st.text_input("Chapati Sensory / Quality", value=def_chapati, placeholder="e.g. Soft, Excellent", key="old_chap")
-
-                submit_old_q = st.form_submit_button("💾 Save / Update Quality Lab Data")
-                if submit_old_q:
+    st.subheader("Saved Quality Lab Records")
+    df_q_saved = load_data("quality")
+    if not df_q_saved.empty:
+        df_q_saved["label"] = (
+            df_q_saved["miller_name"]
+            + " ("
+            + df_q_saved["test_date"]
+            + ")"
+        )
+        del_q_label = st.selectbox("Select Quality Record to Delete", [None] + df_q_saved["label"].tolist(), key="del_q")
+        if del_q_label is not None:
+            del_q_item = df_q_saved[df_q_saved["label"] == del_q_label].iloc[0]
+            del_q_id = int(del_q_item["id"])
+            confirm_del_q = st.checkbox("Haan, main is quality record ko delete karna chahta hoon", key="conf_q")
+            if st.button("🗑️ Confirm & Delete Quality Record", key="btn_del_q"):
+                if confirm_del_q:
                     conn = get_connection()
                     cursor = conn.cursor()
-                    if q_exist_data is not None:
-                        cursor.execute("""
-                            UPDATE quality 
-                            SET test_date=?, miller_name=?, moisture_milled=?, granulation=?, ccl4=?, ash_aia=?, alcoholic_acidity=?, wap=?, gluten=?, chapati_sensory=?
-                            WHERE milling_id=?
-                        """, (test_date, q_miller, moisture_milled, granulation, ccl4, ash_aia, alcoholic_acidity, wap, gluten, chapati_sensory, q_milling_id))
-                    else:
-                        cursor.execute("""
-                            INSERT INTO quality (milling_id, test_date, miller_name, moisture_milled, granulation, ccl4, ash_aia, alcoholic_acidity, wap, gluten, chapati_sensory)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """, (q_milling_id, test_date, q_miller, moisture_milled, granulation, ccl4, ash_aia, alcoholic_acidity, wap, gluten, chapati_sensory))
+                    cursor.execute("DELETE FROM quality WHERE id = ?", (del_q_id,))
                     conn.commit()
                     conn.close()
-                    st.success(f"Quality details successfully updated for Batch ID {q_milling_id}!")
-                    st.rerun()
-
-    if action_type_mil == "➕ New Milling & Quality Entry" or st.session_state["edit_mil_id"] is not None:
-        def_mil_miller = edit_mil_data["miller_name"] if edit_mil_data is not None else None
-        milling_miller_name = get_miller_input("mil", def_mil_miller)
-
-        with st.form("milling_quality_form"):
-            st.subheader("1. Milling Details")
-            c1, c2, c3 = st.columns(3)
-            with c1:
-                def_mdate = datetime.date.today()
-                if edit_mil_data is not None:
-                    try:
-                        def_mdate = datetime.datetime.strptime(edit_mil_data["milling_date"], "%d %b %Y").date()
-                    except Exception:
-                        pass
-                m_date_obj = st.date_input("Milling Date", value=def_mdate)
-                milling_date = m_date_obj.strftime("%d %b %Y")
-            with c2:
-                def_mqty = float(edit_mil_data["milling_qty"]) if edit_mil_data is not None else 0.0
-                milling_qty = st.number_input("Milling Quantity (Wheat Input kg)", min_value=0.0, value=def_mqty, step=10.0, format="%.2f")
-            with c3:
-                def_temp_time = edit_mil_data["tempering_time"] if edit_mil_data is not None and "tempering_time" in edit_mil_data else ""
-                tempering_time = st.text_input("Tempering Time", value=def_temp_time, placeholder="e.g. 12 Hours")
-
-            def_temp_water = float(edit_mil_data["tempering_water"]) if edit_mil_data is not None and "tempering_water" in edit_mil_data and pd.notna(edit_mil_data["tempering_water"]) else 0.0
-            tempering_water = st.number_input("Tempering Water Added (liters/kg)", min_value=0.0, value=def_temp_water, step=1.0)
-
-            st.divider()
-            st.subheader("2. Quality Lab Parameters (Optional for New Entry)")
-
-            q_edit_data = None
-            if st.session_state["edit_mil_id"] is not None:
-                df_q_check = load_data("quality")
-                q_match_edit = df_q_check[df_q_check["milling_id"] == st.session_state["edit_mil_id"]]
-                if not q_match_edit.empty:
-                    q_edit_data = q_match_edit.iloc[0]
-
-            qc1, qc2, qc3 = st.columns(3)
-            with qc1:
-                def_tdate = datetime.date.today()
-                if q_edit_data is not None and pd.notna(q_edit_data["test_date"]):
-                    try:
-                        def_tdate = datetime.datetime.strptime(q_edit_data["test_date"], "%d %b %Y").date()
-                    except Exception:
-                        pass
-                q_test_date = st.date_input("Lab Test Date", value=def_tdate).strftime("%d %b %Y")
-
-                def_mm = float(q_edit_data["moisture_milled"]) if q_edit_data is not None and pd.notna(q_edit_data["moisture_milled"]) else 0.0
-                moisture_milled = st.number_input("Moisture % (Milled/Atta)", min_value=0.0, value=def_mm, step=0.1, format="%.1f")
-
-                def_gran = str(q_edit_data["granulation"]) if q_edit_data is not None and pd.notna(q_edit_data["granulation"]) else ""
-                granulation = st.text_input("Granulation / Fineness", value=def_gran, placeholder="e.g. Fine / 95% through 150 mesh")
-            with qc2:
-                def_ccl4 = str(q_edit_data["ccl4"]) if q_edit_data is not None and pd.notna(q_edit_data["ccl4"]) else ""
-                ccl4 = st.text_input("CCL4 Test", value=def_ccl4, placeholder="e.g. Sound / Clean")
-
-                def_ash = float(q_edit_data["ash_aia"]) if q_edit_data is not None and pd.notna(q_edit_data["ash_aia"]) else 0.0
-                ash_aia = st.number_input("Ash / AIA %", min_value=0.0, value=def_ash, step=0.01, format="%.2f")
-
-                def_aa = float(q_edit_data["alcoholic_acidity"]) if q_edit_data is not None and pd.notna(q_edit_data["alcoholic_acidity"]) else 0.0
-                alcoholic_acidity = st.number_input("Alcoholic Acidity", min_value=0.0, value=def_aa, step=0.01, format="%.2f")
-            with qc3:
-                def_wap = float(q_edit_data["wap"]) if q_edit_data is not None and "wap" in q_edit_data and pd.notna(q_edit_data["wap"]) else 0.0
-                wap = st.number_input("WAP (Water Absorption / Wapsi)", min_value=0.0, value=def_wap, step=0.1, format="%.1f")
-
-                def_gluten = str(q_edit_data["gluten"]) if q_edit_data is not None and pd.notna(q_edit_data["gluten"]) else ""
-                gluten = st.text_input("Gluten %", value=def_gluten, placeholder="e.g. 9.5%")
-
-                def_chapati = str(q_edit_data["chapati_sensory"]) if q_edit_data is not None and pd.notna(q_edit_data["chapati_sensory"]) else ""
-                chapati_sensory = st.text_input("Chapati Sensory / Quality", value=def_chapati, placeholder="e.g. Soft, Excellent")
-
-            btn_mil_label = "Update Milling & Quality Record" if st.session_state["edit_mil_id"] is not None else "Save Milling & Quality Entry"
-            submit_mil_q = st.form_submit_button(label=btn_mil_label)
-
-            if submit_mil_q:
-                conn = get_connection()
-                cursor = conn.cursor()
-                if st.session_state["edit_mil_id"] is not None:
-                    m_id = st.session_state["edit_mil_id"]
-                    cursor.execute("""
-                        UPDATE milling 
-                        SET milling_date=?, miller_name=?, milling_qty=?, tempering_time=?, tempering_water=?
-                        WHERE id=?
-                    """, (milling_date, milling_miller_name, milling_qty, tempering_time, tempering_water, m_id))
-
-                    cursor.execute("SELECT id FROM quality WHERE milling_id = ?", (m_id,))
-                    q_exists = cursor.fetchone()
-                    if q_exists:
-                        cursor.execute("""
-                            UPDATE quality 
-                            SET test_date=?, miller_name=?, moisture_milled=?, granulation=?, ccl4=?, ash_aia=?, alcoholic_acidity=?, wap=?, gluten=?, chapati_sensory=?
-                            WHERE milling_id=?
-                        """, (q_test_date, milling_miller_name, moisture_milled, granulation, ccl4, ash_aia, alcoholic_acidity, wap, gluten, chapati_sensory, m_id))
-                    else:
-                        cursor.execute("""
-                            INSERT INTO quality (milling_id, test_date, miller_name, moisture_milled, granulation, ccl4, ash_aia, alcoholic_acidity, wap, gluten, chapati_sensory)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """, (m_id, q_test_date, milling_miller_name, moisture_milled, granulation, ccl4, ash_aia, alcoholic_acidity, wap, gluten, chapati_sensory))
-                    
-                    conn.commit()
-                    conn.close()
-                    st.success(f"Milling & Quality Record ID {m_id} Updated Successfully!")
-                    st.session_state["edit_mil_id"] = None
+                    st.success(f"Quality Record deleted successfully!")
                     st.rerun()
                 else:
-                    cursor.execute("""
-                        INSERT INTO milling (milling_date, miller_name, milling_qty, tempering_time, tempering_water)
-                        VALUES (?, ?, ?, ?, ?)
-                    """, (milling_date, milling_miller_name, milling_qty, tempering_time, tempering_water))
-                    new_milling_id = cursor.lastrowid
-
-                    cursor.execute("""
-                        INSERT INTO quality (milling_id, test_date, miller_name, moisture_milled, granulation, ccl4, ash_aia, alcoholic_acidity, wap, gluten, chapati_sensory)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (new_milling_id, q_test_date, milling_miller_name, moisture_milled, granulation, ccl4, ash_aia, alcoholic_acidity, wap, gluten, chapati_sensory))
-                    
-                    conn.commit()
-                    conn.close()
-                    st.success(f"Milling & Quality Entry Saved Successfully for {milling_miller_name}!")
-                    st.rerun()
-
-    st.subheader("Saved Milling & Quality Records")
-    df_m_disp = load_data("milling")
-    df_q_disp = load_data("quality")
-    if not df_m_disp.empty:
-        st.write("### Milling Entries Table")
-        st.dataframe(df_m_disp, use_container_width=True)
-    if not df_q_disp.empty:
-        st.write("### Quality Lab Test Table (with WAP)")
-        st.dataframe(df_q_disp, use_container_width=True)
+                    st.error("Pehle confirmation checkbox par tick karein!")
 
 elif menu == "3. Finished Goods & Yield":
     st.header("Finished Goods Production & Yield Tracking")
-
-    if "edit_fg_id" not in st.session_state:
-        st.session_state["edit_fg_id"] = None
-
     df_mil = load_data("milling")
     df_fg_existing = load_data("finished_goods")
 
     if df_mil.empty:
-        st.warning("Pehle Menu 2 se Milling entry karein, tabhi Finished Goods entry ho sakegi.")
-    else:
-        action_type_fg = st.radio(
-            "Action Mode", ["➕ New Finished Goods Entry", "✏️ Edit / 🗑️ Delete Existing Finished Goods"], horizontal=True, key="mode_fg"
+        st.warning(
+            "Pehle Menu 2 से Milling entry karein, tabhi Finished Goods entry"
+            " ho sakegi."
         )
+    else:
+        # Filter out milling batches that already have finished goods entered
+        filled_milling_ids = (
+            df_fg_existing["milling_id"].tolist()
+            if not df_fg_existing.empty and "milling_id" in df_fg_existing.columns
+            else []
+        )
+        available_mil = df_mil[~df_mil["id"].isin(filled_milling_ids)]
 
-        edit_fg_data = None
-        if action_type_fg == "✏️ Edit / 🗑️ Delete Existing Finished Goods" and not df_fg_existing.empty:
-            df_fg_existing["label"] = (
-                "ID: " + df_fg_existing["id"].astype(str) + " | " + df_fg_existing["miller_name"] + " | SKU: " + df_fg_existing["product_code"] + " (" + df_fg_existing["production_date"] + ")"
+        if available_mil.empty:
+            st.success("Sabhi milling batches ke liye Finished Goods entry ki ja chuki hai!")
+        else:
+            available_mil["label"] = (
+                available_mil["miller_name"]
+                + " ("
+                + available_mil["milling_date"]
+                + ")"
             )
-            sel_fg_mod = st.selectbox("Select Finished Goods Record to Modify/Delete", df_fg_existing["label"].tolist(), key="sel_fg_mod")
-            row_edit_fg = df_fg_existing[df_fg_existing["label"] == sel_fg_mod].iloc[0]
-            st.session_state["edit_fg_id"] = int(row_edit_fg["id"])
-            edit_fg_data = row_edit_fg
+            sel_milling = st.selectbox(
+                "Select Milling Batch", [None] + available_mil["label"].tolist()
+            )
+            
+            if sel_milling is not None:
+                row_mil = available_mil[available_mil["label"] == sel_milling].iloc[0]
+                milling_id = int(row_mil["id"])
+                miller_name = row_mil["miller_name"]
+                milling_qty = float(row_mil["milling_qty"])
+                milling_date_str = row_mil["milling_date"]
 
-            with st.expander("⚠️ Delete Finished Goods Confirmation Box", expanded=False):
-                confirm_del_fg = st.checkbox("Haan, main is finished goods record ko delete karna chahta hoon", key="conf_del_fg_rec")
-                if st.button("🗑️ Confirm & Delete Finished Goods", type="primary", key="btn_del_fg_rec"):
-                    if confirm_del_fg:
+                default_prod_date = datetime.date.today()
+                try:
+                    default_prod_date = datetime.datetime.strptime(milling_date_str, "%d %b %Y").date()
+                except Exception:
+                    pass
+
+                st.info(f"Selected Miller: **{miller_name}** | Milling Date: **{milling_date_str}** | Milling Qty: **{milling_qty:,.2f} kg**")
+
+                with st.form("fg_form", clear_on_submit=True):
+                    c1, c2, c3 = st.columns(3)
+                    with c1:
+                        prod_date_obj = st.date_input("Production Date", value=default_prod_date)
+                        production_date = prod_date_obj.strftime("%d %b %Y")
+                        
+                        mfd_date_obj = st.date_input("MFD Date", value=datetime.date.today())
+                        mfd_date = mfd_date_obj.strftime("%b %Y")
+
+                        expiry_date_obj = st.date_input("Expiry Date", value=datetime.date.today() + datetime.timedelta(days=180))
+                        expiry_date = expiry_date_obj.strftime("%d %b %Y")
+                    with c2:
+                        mrp = st.number_input("MRP (Rs)", value=None, placeholder="Type MRP...", step=1.0)
+                        product_code = st.text_input(
+                            "Product Code / SKU", value="BN-ATTA-01"
+                        )
+                        pouch_500g = st.number_input(
+                            "500g Pouches Count", value=None, placeholder="0", step=1
+                        )
+                    with c3:
+                        pouch_1kg = st.number_input(
+                            "1kg Pouches Count", value=None, placeholder="0", step=1
+                        )
+                        pouch_2kg = st.number_input(
+                            "2kg Pouches Count", value=None, placeholder="0", step=1
+                        )
+                        pouch_5kg = st.number_input(
+                            "5kg Pouches Count", value=None, placeholder="0", step=1
+                        )
+
+                    st.divider()
+                    sc1, sc2 = st.columns(2)
+                    with sc1:
+                        bran_qty = st.number_input(
+                            "Bran Quantity (kg)", value=None, placeholder="Type bran qty...", step=1.0
+                        )
+                    with sc2:
+                        refraction_qty = st.number_input(
+                            "Refraction Quantity (kg)",
+                            value=None,
+                            placeholder="Type refraction qty...",
+                            step=1.0,
+                        )
+
+                    submit_fg = st.form_submit_button(
+                        label="Calculate Yield & Save Finished Goods"
+                    )
+                    if submit_fg:
+                        f_500g = int(pouch_500g) if pouch_500g is not None else 0
+                        f_1kg = int(pouch_1kg) if pouch_1kg is not None else 0
+                        f_2kg = int(pouch_2kg) if pouch_2kg is not None else 0
+                        f_5kg = int(pouch_5kg) if pouch_5kg is not None else 0
+                        f_mrp = float(mrp) if mrp is not None else 0.0
+                        f_bran = float(bran_qty) if bran_qty is not None else 0.0
+                        f_refr = float(refraction_qty) if refraction_qty is not None else 0.0
+
+                        wt_500g = f_500g * 0.5
+                        wt_1kg = f_1kg * 1.0
+                        wt_2kg = f_2kg * 2.0
+                        wt_5kg = f_5kg * 5.0
+                        total_finished_qty = wt_500g + wt_1kg + wt_2kg + wt_5kg
+
+                        bran_pct = (
+                            (f_bran / milling_qty) * 100 if milling_qty > 0 else 0.0
+                        )
+                        refraction_pct = (
+                            (f_refr / milling_qty) * 100
+                            if milling_qty > 0
+                            else 0.0
+                        )
+                        yield_pct = (
+                            (total_finished_qty / milling_qty) * 100
+                            if milling_qty > 0
+                            else 0.0
+                        )
+
+                        total_accounted = (
+                            total_finished_qty + f_bran + f_refr
+                        )
+                        processing_loss_qty = milling_qty - total_accounted
+                        processing_loss_pct = (
+                            (processing_loss_qty / milling_qty) * 100
+                            if milling_qty > 0
+                            else 0.0
+                        )
+
                         conn = get_connection()
                         cursor = conn.cursor()
-                        cursor.execute("DELETE FROM finished_goods WHERE id = ?", (st.session_state["edit_fg_id"],))
+                        cursor.execute(
+                            """
+                            INSERT INTO finished_goods (milling_id, production_date, miller_name, mfd_date, expiry_date, mrp, product_code, pouch_500g, pouch_1kg, pouch_2kg, pouch_5kg, total_finished_qty, bran_qty, bran_pct, refraction_qty, refraction_pct, yield_pct, processing_loss_pct)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                            (
+                                milling_id,
+                                production_date,
+                                miller_name,
+                                mfd_date,
+                                expiry_date,
+                                f_mrp,
+                                product_code,
+                                f_500g,
+                                f_1kg,
+                                f_2kg,
+                                f_5kg,
+                                round(total_finished_qty, 2),
+                                f_bran,
+                                f"{bran_pct:.2f}%",
+                                f_refr,
+                                f"{refraction_pct:.2f}%",
+                                f"{yield_pct:.2f}%",
+                                f"{processing_loss_pct:.2f}%",
+                            ),
+                        )
                         conn.commit()
                         conn.close()
-                        st.success("Finished Goods Record deleted successfully!")
-                        st.session_state["edit_fg_id"] = None
+                        st.success(
+                            f"Finished Goods Saved! Total Finished Output:"
+                            f" {total_finished_qty:,.2f} kg | Yield:"
+                            f" {yield_pct:.2f}%"
+                        )
                         st.rerun()
-                    else:
-                        st.error("Pehle confirmation checkbox par tick karein!")
-        else:
-            if action_type_fg != "✏️ Edit / 🗑️ Delete Existing Finished Goods":
-                st.session_state["edit_fg_id"] = None
-
-        if action_type_fg == "➕ New Finished Goods Entry" or st.session_state["edit_fg_id"] is not None:
-            if st.session_state["edit_fg_id"] is None and not df_fg_existing.empty and "milling_id" in df_fg_existing.columns:
-                completed_milling_ids = df_fg_existing["milling_id"].tolist()
-                df_mil_available = df_mil[~df_mil["id"].isin(completed_milling_ids)]
-            else:
-                df_mil_available = df_mil.copy()
-
-            if st.session_state["edit_fg_id"] is None and df_mil_available.empty:
-                st.success("🎉 Sabhi milling batches ki Finished Goods entry ki ja chuki hai!")
-            else:
-                if st.session_state["edit_fg_id"] is not None:
-                    df_mil_available = df_mil.copy()
-
-                df_mil_available["label"] = (
-                    "Batch ID: "
-                    + df_mil_available["id"].astype(str)
-                    + " | "
-                    + df_mil_available["miller_name"]
-                    + " ("
-                    + df_mil_available["milling_date"]
-                    + ")"
-                )
-
-                default_mil_idx = 0
-                if st.session_state["edit_fg_id"] is not None and edit_fg_data is not None:
-                    matched_mil = df_mil_available[df_mil_available["id"] == edit_fg_data["milling_id"]]
-                    if not matched_mil.empty:
-                        matched_label = matched_mil.iloc[0]["label"]
-                        if matched_label in df_mil_available["label"].tolist():
-                            default_mil_idx = df_mil_available["label"].tolist().index(matched_label)
-
-                sel_milling = st.selectbox(
-                    "Select Milling Batch", df_mil_available["label"].tolist(), index=default_mil_idx, key="sel_milling_fg"
-                )
-
-                if sel_milling is not None:
-                    row_mil = df_mil_available[df_mil_available["label"] == sel_milling].iloc[0]
-                    milling_id = int(row_mil["id"])
-                    miller_name = row_mil["miller_name"]
-                    milling_qty = float(row_mil["milling_qty"])
-                    milling_date_str = row_mil["milling_date"]
-
-                    st.info(f"Selected Miller: **{miller_name}** | Milling Date: **{milling_date_str}** | Milling Qty: **{milling_qty:,.2f} kg**")
-
-                    with st.form("fg_form", clear_on_submit=False):
-                        c1, c2, c3 = st.columns(3)
-                        with c1:
-                            default_prod_date = datetime.date.today()
-                            if edit_fg_data is not None:
-                                try:
-                                    default_prod_date = datetime.datetime.strptime(edit_fg_data["production_date"], "%d %b %Y").date()
-                                except Exception:
-                                    pass
-                            prod_date_obj = st.date_input("Production Date", value=default_prod_date)
-                            production_date = prod_date_obj.strftime("%d %b %Y")
-                        with c2:
-                            default_mfd = datetime.date.today()
-                            if edit_fg_data is not None:
-                                try:
-                                    default_mfd = datetime.datetime.strptime("01 " + edit_fg_data["mfd_date"], "%d %b %Y").date()
-                                except Exception:
-                                    pass
-                            mfd_date_obj = st.date_input("MFD Date", value=default_mfd)
-                            mfd_date = mfd_date_obj.strftime("%b %Y")
-                        with c3:
-                            default_exp = datetime.date.today() + datetime.timedelta(days=180)
-                            if edit_fg_data is not None:
-                                try:
-                                    default_exp = datetime.datetime.strptime(edit_fg_data["expiry_date"], "%d %b %Y").date()
-                                except Exception:
-                                    pass
-                            expiry_date_obj = st.date_input("Expiry Date", value=default_exp)
-                            expiry_date = expiry_date_obj.strftime("%d %b %Y")
-
-                        st.divider()
-                        st.subheader("SKU & MRP Configuration")
-
-                        sku_options = ["500g Pouch", "1kg Pouch", "2kg Pouch", "5kg Pouch", "Custom SKU"]
-                        default_sku_idx = 0
-                        if edit_fg_data is not None:
-                            p_code = edit_fg_data["product_code"]
-                            if "500g" in p_code: default_sku_idx = 0
-                            elif "1kg" in p_code: default_sku_idx = 1
-                            elif "2kg" in p_code: default_sku_idx = 2
-                            elif "5kg" in p_code: default_sku_idx = 3
-                            else: default_sku_idx = 4
-
-                        sc1, sc2, sc3, sc4 = st.columns(4)
-                        with sc1:
-                            sku_type = st.selectbox("Select SKU Type", sku_options, index=default_sku_idx, key="fg_sku_type")
-                        with sc2:
-                            default_pcode = edit_fg_data["product_code"] if edit_fg_data is not None else "BN-ATTA-1KG"
-                            product_code = st.text_input("Product Code / SKU Name", value=default_pcode)
-                        with sc3:
-                            default_mrp = float(edit_fg_data["mrp"]) if edit_fg_data is not None and pd.notna(edit_fg_data.get("mrp")) else 0.0
-                            mrp = st.number_input("MRP (Rs)", value=default_mrp, step=1.0, format="%.2f")
-                        with sc4:
-                            default_p_count = 0
-                            if edit_fg_data is not None:
-                                default_p_count = int(edit_fg_data.get("pouch_1kg", 0) or edit_fg_data.get("pouch_500g", 0) or edit_fg_data.get("pouch_2kg", 0) or edit_fg_data.get("pouch_5kg", 0))
-                            pouch_count = st.number_input("Number of Pouches / Units", min_value=0, value=default_p_count, step=1)
-
-                        st.divider()
-                        rc1, rc2 = st.columns(2)
-                        with rc1:
-                            default_bran = float(edit_fg_data["bran_qty"]) if edit_fg_data is not None else 0.0
-                            bran_qty = st.number_input("Bran Quantity (kg)", min_value=0.0, value=default_bran, step=1.0, format="%.2f")
-                        with rc2:
-                            default_refr = float(edit_fg_data["refraction_qty"]) if edit_fg_data is not None else 0.0
-                            refraction_qty = st.number_input("Refraction Quantity (kg)", min_value=0.0, value=default_refr, step=1.0, format="%.2f")
-
-                        btn_label_fg = "Update Finished Goods" if st.session_state["edit_fg_id"] is not None else "Calculate Yield & Save Finished Goods"
-                        submit_fg = st.form_submit_button(label=btn_label_fg)
-
-                        if submit_fg:
-                            f_mrp = float(mrp) if mrp is not None else 0.0
-                            f_bran = float(bran_qty) if bran_qty is not None else 0.0
-                            f_refr = float(refraction_qty) if refraction_qty is not None else 0.0
-                            f_count = int(pouch_count) if pouch_count is not None else 0
-
-                            multiplier = 1.0
-                            if "500g" in sku_type: multiplier = 0.5
-                            elif "1kg" in sku_type: multiplier = 1.0
-                            elif "2kg" in sku_type: multiplier = 2.0
-                            elif "5kg" in sku_type: multiplier = 5.0
-
-                            total_finished_qty = f_count * multiplier
-
-                            bran_pct = (f_bran / milling_qty) * 100 if milling_qty > 0 else 0.0
-                            refraction_pct = (f_refr / milling_qty) * 100 if milling_qty > 0 else 0.0
-                            yield_pct = (total_finished_qty / milling_qty) * 100 if milling_qty > 0 else 0.0
-
-                            total_accounted = total_finished_qty + f_bran + f_refr
-                            processing_loss_qty = milling_qty - total_accounted
-                            processing_loss_pct = (processing_loss_qty / milling_qty) * 100 if milling_qty > 0 else 0.0
-
-                            conn = get_connection()
-                            cursor = conn.cursor()
-
-                            if st.session_state["edit_fg_id"] is not None:
-                                cursor.execute("""
-                                    UPDATE finished_goods 
-                                    SET milling_id=?, production_date=?, miller_name=?, mfd_date=?, expiry_date=?, mrp=?, product_code=?, pouch_500g=?, pouch_1kg=?, pouch_2kg=?, pouch_5kg=?, total_finished_qty=?, bran_qty=?, bran_pct=?, refraction_qty=?, refraction_pct=?, yield_pct=?, processing_loss_pct=?
-                                    WHERE id=?
-                                """, (
-                                    milling_id, production_date, miller_name, mfd_date, expiry_date, f_mrp, product_code,
-                                    f_count if "500g" in sku_type else 0,
-                                    f_count if "1kg" in sku_type else 0,
-                                    f_count if "2kg" in sku_type else 0,
-                                    f_count if "5kg" in sku_type else 0,
-                                    round(total_finished_qty, 2), f_bran, f"{bran_pct:.2f}%", f_refr, f"{refraction_pct:.2f}%", f"{yield_pct:.2f}%", f"{processing_loss_pct:.2f}%",
-                                    st.session_state["edit_fg_id"]
-                                ))
-                                conn.commit()
-                                conn.close()
-                                st.success("Finished Goods Updated Successfully!")
-                                st.session_state["edit_fg_id"] = None
-                                st.rerun()
-                            else:
-                                cursor.execute("""
-                                    INSERT INTO finished_goods (milling_id, production_date, miller_name, mfd_date, expiry_date, mrp, product_code, pouch_500g, pouch_1kg, pouch_2kg, pouch_5kg, total_finished_qty, bran_qty, bran_pct, refraction_qty, refraction_pct, yield_pct, processing_loss_pct)
-                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                                """, (
-                                    milling_id, production_date, miller_name, mfd_date, expiry_date, f_mrp, product_code,
-                                    f_count if "500g" in sku_type else 0,
-                                    f_count if "1kg" in sku_type else 0,
-                                    f_count if "2kg" in sku_type else 0,
-                                    f_count if "5kg" in sku_type else 0,
-                                    round(total_finished_qty, 2), f_bran, f"{bran_pct:.2f}%", f_refr, f"{refraction_pct:.2f}%", f"{yield_pct:.2f}%", f"{processing_loss_pct:.2f}%"
-                                ))
-                                conn.commit()
-                                conn.close()
-                                st.success("Finished Goods Saved Successfully!")
-                                st.rerun()
 
     st.subheader("Saved Finished Goods Records")
-    df_fg_show = load_data("finished_goods")
-    if not df_fg_show.empty:
-        st.dataframe(df_fg_show, use_container_width=True)
+    df_fg_saved = load_data("finished_goods")
+    if not df_fg_saved.empty:
+        df_fg_saved["label"] = (
+            df_fg_saved["miller_name"]
+            + " ("
+            + df_fg_saved["production_date"]
+            + ")"
+        )
+        del_fg_label = st.selectbox("Select Finished Goods Record to Delete", [None] + df_fg_saved["label"].tolist(), key="del_fg")
+        if del_fg_label is not None:
+            del_fg_item = df_fg_saved[df_fg_saved["label"] == del_fg_label].iloc[0]
+            del_fg_id = int(del_fg_item["id"])
+            confirm_del_fg = st.checkbox("Haan, main is finished goods record ko delete karna chahta hoon", key="conf_fg")
+            if st.button("🗑️ Confirm & Delete Finished Goods Record", key="btn_del_fg"):
+                if confirm_del_fg:
+                    conn = get_connection()
+                    cursor = conn.cursor()
+                    cursor.execute("DELETE FROM finished_goods WHERE id = ?", (del_fg_id,))
+                    conn.commit()
+                    conn.close()
+                    st.success(f"Finished Goods Record deleted successfully!")
+                    st.rerun()
+                else:
+                    st.error("Pehle confirmation checkbox par tick karein!")
 
 elif menu == "4. Better Nutrition Packing Material":
-    st.header("Packing Material Management")
-    
-    if "edit_pm_id" not in st.session_state:
-        st.session_state["edit_pm_id"] = None
+    st.header("Better Nutrition Packing Material Dispatch/Stock Entry")
+    miller_name = get_miller_input("pm")
+    with st.form("pm_form", clear_on_submit=True):
+        c1, c2 = st.columns(2)
+        with c1:
+            pm_date_obj = st.date_input("Date", datetime.date.today())
+            pm_date = pm_date_obj.strftime("%d %b %Y")
+            carton_type = st.selectbox(
+                "Carton Type", ["500g Carton", "1kg Carton", "2kg Carton", "5kg Carton"]
+            )
+            cartons_sent = st.number_input(
+                "Cartons Sent (Units)", value=None, placeholder="0", step=1
+            )
+            tape_sent = st.number_input(
+                "Tape Sent (Rolls)", value=None, placeholder="0", step=1
+            )
+        with c2:
+            oxysorb_qty = st.number_input(
+                "Oxysorb Packets Qty", value=None, placeholder="0", step=10
+            )
+            roll_sku = st.text_input("Roll SKU / Description", value="")
+            roll_qty_sent = st.number_input(
+                "Roll Qty Sent (kg or meters)",
+                value=None,
+                placeholder="0",
+                step=1.0,
+            )
 
+        submit_pm = st.form_submit_button(
+            label="Save Packing Material Entry"
+        )
+        if submit_pm:
+            f_cartons = int(cartons_sent) if cartons_sent is not None else 0
+            f_tape = int(tape_sent) if tape_sent is not None else 0
+            f_oxysorb = int(oxysorb_qty) if oxysorb_qty is not None else 0
+            f_roll_qty = float(roll_qty_sent) if roll_qty_sent is not None else 0.0
+
+            conn = get_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO packing_material (date, miller_name, carton_type, cartons_sent, tape_sent, oxysorb_qty, roll_sku, roll_qty_sent)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+                (
+                    pm_date,
+                    miller_name,
+                    carton_type,
+                    f_cartons,
+                    f_tape,
+                    f_oxysorb,
+                    roll_sku,
+                    f_roll_qty,
+                ),
+            )
+            conn.commit()
+            conn.close()
+            st.success(
+                f"Packing Material entry successfully saved for {miller_name}!"
+            )
+
+    st.subheader("Saved Packing Material Records")
     df_pm_saved = load_data("packing_material")
-    action_type_pm = "➕ New Packing Entry"
     if not df_pm_saved.empty:
-        action_type_pm = st.radio("Action Mode", ["➕ New Packing Entry", "✏️ Edit / 🗑️ Delete Existing Packing"], horizontal=True, key="mode_pm")
-
-    edit_pm_data = None
-    if action_type_pm == "✏️ Edit / 🗑️ Delete Existing Packing" and not df_pm_saved.empty:
-        df_pm_saved["label"] = "ID: " + df_pm_saved["id"].astype(str) + " | Date: " + df_pm_saved["date"] + " | Miller: " + df_pm_saved["miller_name"]
-        sel_pm_mod = st.selectbox("Select Record to Modify/Delete", df_pm_saved["label"].tolist(), key="sel_pm_mod")
-        row_edit_pm = df_pm_saved[df_pm_saved["label"] == sel_pm_mod].iloc[0]
-        st.session_state["edit_pm_id"] = int(row_edit_pm["id"])
-        edit_pm_data = row_edit_pm
-
-        with st.expander("⚠️ Delete Confirmation Box", expanded=False):
-            confirm_del_pm = st.checkbox("Haan, main is packing material record ko delete karna chahta hoon", key="conf_del_pm")
-            if st.button("🗑️ Confirm & Delete Packing Record", type="primary", key="btn_del_pm_rec"):
+        df_pm_saved["label"] = (
+            df_pm_saved["miller_name"]
+            + " ("
+            + df_pm_saved["date"]
+            + ")"
+        )
+        del_pm_label = st.selectbox("Select Packing Material Record to Delete", [None] + df_pm_saved["label"].tolist(), key="del_pm")
+        if del_pm_label is not None:
+            del_pm_item = df_pm_saved[df_pm_saved["label"] == del_pm_label].iloc[0]
+            del_pm_id = int(del_pm_item["id"])
+            confirm_del_pm = st.checkbox("Haan, main is packing material record ko delete karna chahta hoon", key="conf_pm")
+            if st.button("🗑️ Confirm & Delete Packing Material Record", key="btn_del_pm"):
                 if confirm_del_pm:
                     conn = get_connection()
                     cursor = conn.cursor()
-                    cursor.execute("DELETE FROM packing_material WHERE id = ?", (st.session_state["edit_pm_id"],))
+                    cursor.execute("DELETE FROM packing_material WHERE id = ?", (del_pm_id,))
                     conn.commit()
                     conn.close()
-                    st.success("Packing Material Record deleted successfully!")
-                    st.session_state["edit_pm_id"] = None
+                    st.success(f"Packing Material Record deleted successfully!")
                     st.rerun()
                 else:
                     st.error("Pehle confirmation checkbox par tick karein!")
-    else:
-        st.session_state["edit_pm_id"] = None
-
-    if action_type_pm == "➕ New Packing Entry" or st.session_state["edit_pm_id"] is not None:
-        def_pm_miller = edit_pm_data["miller_name"] if edit_pm_data is not None else None
-        pm_miller_name = get_miller_input("pm", def_pm_miller)
-
-        with st.form("pm_form", clear_on_submit=False):
-            c1, c2, c3 = st.columns(3)
-            with c1:
-                default_pm_date = datetime.date.today()
-                if edit_pm_data is not None:
-                    try:
-                        default_pm_date = datetime.datetime.strptime(edit_pm_data["date"], "%d %b %Y").date()
-                    except Exception:
-                        pass
-                pm_date_obj = st.date_input("Entry Date", value=default_pm_date)
-                pm_date_str = pm_date_obj.strftime("%d %b %Y")
-
-                carton_opts = ["Master Carton (1kg)", "Master Carton (500g)", "Master Carton (2kg)", "Master Carton (5kg)", "Other"]
-                default_carton_idx = 0
-                if edit_pm_data is not None and edit_pm_data["carton_type"] in carton_opts:
-                    default_carton_idx = carton_opts.index(edit_pm_data["carton_type"])
-                carton_type = st.selectbox("Carton Type", carton_opts, index=default_carton_idx)
-
-            with c2:
-                default_cartons = int(edit_pm_data["cartons_sent"]) if edit_pm_data is not None and pd.notna(edit_pm_data["cartons_sent"]) else 0
-                cartons_sent = st.number_input("Cartons Sent / Used", min_value=0, value=default_cartons, step=1)
-
-                default_tape = int(edit_pm_data["tape_sent"]) if edit_pm_data is not None and pd.notna(edit_pm_data["tape_sent"]) else 0
-                tape_sent = st.number_input("Tape Rolls Sent", min_value=0, value=default_tape, step=1)
-
-            with c3:
-                default_oxysorb = int(edit_pm_data["oxysorb_qty"]) if edit_pm_data is not None and pd.notna(edit_pm_data["oxysorb_qty"]) else 0
-                oxysorb_qty = st.number_input("Oxysorb Packets Qty", min_value=0, value=default_oxysorb, step=1)
-
-                roll_opts = ["1kg Roll", "500g Roll", "2kg Roll", "5kg Roll", "None"]
-                default_roll_idx = 0
-                if edit_pm_data is not None and edit_pm_data["roll_sku"] in roll_opts:
-                    default_roll_idx = roll_opts.index(edit_pm_data["roll_sku"])
-                roll_sku = st.selectbox("Roll SKU", roll_opts, index=default_roll_idx)
-
-            default_roll_qty = float(edit_pm_data["roll_qty_sent"]) if edit_pm_data is not None and pd.notna(edit_pm_data["roll_qty_sent"]) else 0.0
-            roll_qty_sent = st.number_input("Roll Quantity Sent (kg/meters)", min_value=0.0, value=default_roll_qty, step=1.0, format="%.2f")
-
-            btn_pm_label = "Update Packing Material Record" if st.session_state["edit_pm_id"] is not None else "Save Packing Material Entry"
-            submit_pm = st.form_submit_button(label=btn_pm_label)
-
-            if submit_pm:
-                conn = get_connection()
-                cursor = conn.cursor()
-                if st.session_state["edit_pm_id"] is not None:
-                    cursor.execute("""
-                        UPDATE packing_material 
-                        SET date=?, miller_name=?, carton_type=?, cartons_sent=?, tape_sent=?, oxysorb_qty=?, roll_sku=?, roll_qty_sent=?
-                        WHERE id=?
-                    """, (pm_date_str, pm_miller_name, carton_type, cartons_sent, tape_sent, oxysorb_qty, roll_sku, roll_qty_sent, st.session_state["edit_pm_id"]))
-                    conn.commit()
-                    conn.close()
-                    st.success("Packing Material Updated Successfully!")
-                    st.session_state["edit_pm_id"] = None
-                    st.rerun()
-                else:
-                    cursor.execute("""
-                        INSERT INTO packing_material (date, miller_name, carton_type, cartons_sent, tape_sent, oxysorb_qty, roll_sku, roll_qty_sent)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (pm_date_str, pm_miller_name, carton_type, cartons_sent, tape_sent, oxysorb_qty, roll_sku, roll_qty_sent))
-                    conn.commit()
-                    conn.close()
-                    st.success("Packing Material Saved Successfully!")
-                    st.rerun()
-
-    st.subheader("Existing Packing Material Records")
-    df_pm_show = load_data("packing_material")
-    if not df_pm_show.empty:
-        st.dataframe(df_pm_show, use_container_width=True)
 
 elif menu == "5. Daily Dispatch Entry":
-    st.header("Daily Dispatch Management")
-    
-    if "edit_disp_id" not in st.session_state:
-        st.session_state["edit_disp_id"] = None
+    st.header("Daily Finished Goods Dispatch Entry")
+    miller_name = get_miller_input("dispatch")
+    with st.form("dispatch_form", clear_on_submit=True):
+        c1, c2 = st.columns(2)
+        with c1:
+            disp_date_obj = st.date_input("Dispatch Date", datetime.date.today())
+            dispatch_date = disp_date_obj.strftime("%d %b %Y")
+            vehicle_no = st.text_input(
+                "Vehicle Number", placeholder="e.g. UP-32-XZ-1234"
+            )
+            disp_500g = st.number_input(
+                "Dispatched 500g Pouches", value=None, placeholder="0", step=1
+            )
+            disp_1kg = st.number_input(
+                "Dispatched 1kg Pouches", value=None, placeholder="0", step=1
+            )
+        with c2:
+            disp_2kg = st.number_input(
+                "Dispatched 2kg Pouches", value=None, placeholder="0", step=1
+            )
+            disp_5kg = st.number_input(
+                "Dispatched 5kg Pouches", value=None, placeholder="0", step=1
+            )
+            cartons_used = st.number_input(
+                "Cartons Used", value=None, placeholder="0", step=1
+            )
+            remarks = st.text_input("Dispatch Remarks / Destination", value="")
 
+        submit_disp = st.form_submit_button(
+            label="Save Dispatch Entry"
+        )
+        if submit_disp:
+            f_d500 = int(disp_500g) if disp_500g is not None else 0
+            f_d1k = int(disp_1kg) if disp_1kg is not None else 0
+            f_d2k = int(disp_2kg) if disp_2kg is not None else 0
+            f_d5k = int(disp_5kg) if disp_5kg is not None else 0
+            f_cartons_used = int(cartons_used) if cartons_used is not None else 0
+
+            total_disp_wt = (
+                (f_d500 * 0.5)
+                + (f_d1k * 1.0)
+                + (f_d2k * 2.0)
+                + (f_d5k * 5.0)
+            )
+            conn = get_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO dispatch (dispatch_date, miller_name, vehicle_no, disp_500g, disp_1kg, disp_2kg, disp_5kg, total_dispatched_wt, cartons_used, remarks)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+                (
+                    dispatch_date,
+                    miller_name,
+                    vehicle_no,
+                    f_d500,
+                    f_d1k,
+                    f_d2k,
+                    f_d5k,
+                    round(total_disp_wt, 2),
+                    f_cartons_used,
+                    remarks,
+                ),
+            )
+            conn.commit()
+            conn.close()
+            st.success(
+                f"Dispatch Saved Successfully! Total Dispatched Weight:"
+                f" {total_disp_wt:,.2f} kg"
+            )
+
+    st.subheader("Saved Dispatch Records")
     df_disp_saved = load_data("dispatch")
-    action_type_disp = "➕ New Dispatch Entry"
     if not df_disp_saved.empty:
-        action_type_disp = st.radio("Action Mode", ["➕ New Dispatch Entry", "✏️ Edit / 🗑️ Delete Existing Dispatch"], horizontal=True, key="mode_disp")
-
-    edit_disp_data = None
-    if action_type_disp == "✏️ Edit / 🗑️ Delete Existing Dispatch" and not df_disp_saved.empty:
-        df_disp_saved["label"] = "ID: " + df_disp_saved["id"].astype(str) + " | Date: " + df_disp_saved["dispatch_date"] + " | Vehicle: " + df_disp_saved["vehicle_no"]
-        sel_disp_mod = st.selectbox("Select Dispatch Record to Modify/Delete", df_disp_saved["label"].tolist(), key="sel_disp_mod")
-        row_edit_disp = df_disp_saved[df_disp_saved["label"] == sel_disp_mod].iloc[0]
-        st.session_state["edit_disp_id"] = int(row_edit_disp["id"])
-        edit_disp_data = row_edit_disp
-
-        with st.expander("⚠️ Delete Confirmation Box", expanded=False):
-            confirm_del_disp = st.checkbox("Haan, main is dispatch record ko delete karna chahta hoon", key="conf_del_disp")
-            if st.button("🗑️ Confirm & Delete Dispatch Record", type="primary", key="btn_del_disp_rec"):
+        df_disp_saved["label"] = (
+            df_disp_saved["miller_name"]
+            + " ("
+            + df_disp_saved["dispatch_date"]
+            + ")"
+        )
+        del_disp_label = st.selectbox("Select Dispatch Record to Delete", [None] + df_disp_saved["label"].tolist(), key="del_disp")
+        if del_disp_label is not None:
+            del_disp_item = df_disp_saved[df_disp_saved["label"] == del_disp_label].iloc[0]
+            del_disp_id = int(del_disp_item["id"])
+            confirm_del_disp = st.checkbox("Haan, main is dispatch record ko delete karna chahta hoon", key="conf_disp")
+            if st.button("🗑️ Confirm & Delete Dispatch Record", key="btn_del_disp"):
                 if confirm_del_disp:
                     conn = get_connection()
                     cursor = conn.cursor()
-                    cursor.execute("DELETE FROM dispatch WHERE id = ?", (st.session_state["edit_disp_id"],))
+                    cursor.execute("DELETE FROM dispatch WHERE id = ?", (del_disp_id,))
                     conn.commit()
                     conn.close()
-                    st.success("Dispatch Record deleted successfully!")
-                    st.session_state["edit_disp_id"] = None
+                    st.success(f"Dispatch Record deleted successfully!")
                     st.rerun()
                 else:
                     st.error("Pehle confirmation checkbox par tick karein!")
-    else:
-        st.session_state["edit_disp_id"] = None
-
-    if action_type_disp == "➕ New Dispatch Entry" or st.session_state["edit_disp_id"] is not None:
-        def_disp_miller = edit_disp_data["miller_name"] if edit_disp_data is not None else None
-        disp_miller_name = get_miller_input("disp", def_disp_miller)
-
-        with st.form("dispatch_form", clear_on_submit=False):
-            c1, c2 = st.columns(2)
-            with c1:
-                default_disp_date = datetime.date.today()
-                if edit_disp_data is not None:
-                    try:
-                        default_disp_date = datetime.datetime.strptime(edit_disp_data["dispatch_date"], "%d %b %Y").date()
-                    except Exception:
-                        pass
-                disp_date_obj = st.date_input("Dispatch Date", value=default_disp_date)
-                dispatch_date_str = disp_date_obj.strftime("%d %b %Y")
-
-                default_veh_no = edit_disp_data["vehicle_no"] if edit_disp_data is not None else ""
-                vehicle_no = st.text_input("Vehicle Number", value=default_veh_no, placeholder="e.g. UP-75-BT-1234")
-
-            with c2:
-                default_cartons_used = int(edit_disp_data["cartons_used"]) if edit_disp_data is not None and pd.notna(edit_disp_data["cartons_used"]) else 0
-                cartons_used = st.number_input("Cartons Used", min_value=0, value=default_cartons_used, step=1)
-
-            st.divider()
-            st.subheader("Dispatched Quantities (Pouches)")
-            dc1, dc2, dc3, dc4 = st.columns(4)
-            with dc1:
-                def_d500 = int(edit_disp_data["disp_500g"]) if edit_disp_data is not None and pd.notna(edit_disp_data.get("disp_500g")) else 0
-                disp_500g = st.number_input("500g Pouches", min_value=0, value=def_d500, step=1)
-            with dc2:
-                def_d1k = int(edit_disp_data["disp_1kg"]) if edit_disp_data is not None and pd.notna(edit_disp_data.get("disp_1kg")) else 0
-                disp_1kg = st.number_input("1kg Pouches", min_value=0, value=def_d1k, step=1)
-            with dc3:
-                def_d2k = int(edit_disp_data["disp_2kg"]) if edit_disp_data is not None and pd.notna(edit_disp_data.get("disp_2kg")) else 0
-                disp_2kg = st.number_input("2kg Pouches", min_value=0, value=def_d2k, step=1)
-            with dc4:
-                def_d5k = int(edit_disp_data["disp_5kg"]) if edit_disp_data is not None and pd.notna(edit_disp_data.get("disp_5kg")) else 0
-                disp_5kg = st.number_input("5kg Pouches", min_value=0, value=def_d5k, step=1)
-
-            default_rem_disp = edit_disp_data["remarks"] if edit_disp_data is not None and pd.notna(edit_disp_data.get("remarks")) else ""
-            remarks_disp = st.text_input("Dispatch Remarks / Party Name", value=default_rem_disp)
-
-            btn_disp_label = "Update Dispatch Record" if st.session_state["edit_disp_id"] is not None else "Save Dispatch Entry"
-            submit_disp = st.form_submit_button(label=btn_disp_label)
-
-            if submit_disp:
-                total_dispatched_wt = (disp_500g * 0.5) + (disp_1kg * 1.0) + (disp_2kg * 2.0) + (disp_5kg * 5.0)
-
-                conn = get_connection()
-                cursor = conn.cursor()
-                if st.session_state["edit_disp_id"] is not None:
-                    cursor.execute("""
-                        UPDATE dispatch 
-                        SET dispatch_date=?, miller_name=?, vehicle_no=?, disp_500g=?, disp_1kg=?, disp_2kg=?, disp_5kg=?, total_dispatched_wt=?, cartons_used=?, remarks=?
-                        WHERE id=?
-                    """, (dispatch_date_str, disp_miller_name, vehicle_no, disp_500g, disp_1kg, disp_2kg, disp_5kg, round(total_dispatched_wt, 2), cartons_used, remarks_disp, st.session_state["edit_disp_id"]))
-                    conn.commit()
-                    conn.close()
-                    st.success("Dispatch Record Updated Successfully!")
-                    st.session_state["edit_disp_id"] = None
-                    st.rerun()
-                else:
-                    cursor.execute("""
-                        INSERT INTO dispatch (dispatch_date, miller_name, vehicle_no, disp_500g, disp_1kg, disp_2kg, disp_5kg, total_dispatched_wt, cartons_used, remarks)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (dispatch_date_str, disp_miller_name, vehicle_no, disp_500g, disp_1kg, disp_2kg, disp_5kg, round(total_dispatched_wt, 2), cartons_used, remarks_disp))
-                    conn.commit()
-                    conn.close()
-                    st.success(f"Dispatch Saved Successfully! Total Weight: {total_dispatched_wt:,.2f} kg")
-                    st.rerun()
-
-    st.subheader("Existing Dispatch Records")
-    df_disp_show = load_data("dispatch")
-    if not df_disp_show.empty:
-        st.dataframe(df_disp_show, use_container_width=True)
 
 elif menu == "6. Master Records & Export (Admin Controls)":
-    st.header("Master Records & Data Export (Admin Only)")
-    
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-        "Raw Material", "Milling", "Quality Lab", "Finished Goods", "Packing Material", "Dispatch"
-    ])
-    
-    with tab1:
-        st.subheader("Raw Material Master Table")
-        df_m1 = load_data("raw_material")
-        st.dataframe(df_m1, use_container_width=True)
-    with tab2:
-        st.subheader("Milling Master Table")
-        df_m2 = load_data("milling")
-        st.dataframe(df_m2, use_container_width=True)
-    with tab3:
-        st.subheader("Quality Lab Master Table (with WAP)")
-        df_m3 = load_data("quality")
-        st.dataframe(df_m3, use_container_width=True)
-    with tab4:
-        st.subheader("Finished Goods Master Table")
-        df_m4 = load_data("finished_goods")
-        st.dataframe(df_m4, use_container_width=True)
-    with tab5:
-        st.subheader("Packing Material Master Table")
-        df_m5 = load_data("packing_material")
-        st.dataframe(df_m5, use_container_width=True)
-    with tab6:
-        st.subheader("Dispatch Master Table")
-        df_m6 = load_data("dispatch")
-        st.dataframe(df_m6, use_container_width=True)
+    st.header("Master Records, Data Management & Admin Controls")
+
+    if user_role != "Admin":
+        st.warning(
+            "⚠️ Ye section sirf **Admin** access ke liye hai. Aapka current role"
+            f" '{user_role}' hai."
+        )
+    else:
+        st.success(
+            "🔓 Admin privileges active. Aap tables view kar sakte hain aur data"
+            " export/delete kar sakte hain."
+        )
+
+        table_to_manage = st.selectbox(
+            "Select Database Table to Manage",
+            [
+                "raw_material",
+                "milling",
+                "quality",
+                "finished_goods",
+                "packing_material",
+                "dispatch",
+            ],
+        )
+
+        df_manage = load_data(table_to_manage)
+        st.write(f"### Current Data in `{table_to_manage}`")
+        if df_manage.empty:
+            st.info("Table khaali hai.")
+        else:
+            st.dataframe(df_manage, use_container_width=True)
+
+            csv_data = df_manage.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                label=f"📥 Download `{table_to_manage}` as CSV",
+                data=csv_data,
+                file_name=f"{table_to_manage}_export.csv",
+                mime="text/csv",
+            )
