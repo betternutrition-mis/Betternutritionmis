@@ -1,131 +1,43 @@
-import streamlit as st
-import sqlite3
-import datetime
-import pandas as pd
-import os
+if action_type_fg == "➕ New Finished Goods Entry" or st.session_state["edit_fg_id"] is not None:
+            
+            # --- Ye filtering add karni hai taaki duplicate batches na dikhein ---
+            if st.session_state["edit_fg_id"] is None and not df_fg_existing.empty and "milling_id" in df_fg_existing.columns:
+                completed_milling_ids = df_fg_existing["milling_id"].tolist()
+                df_mil_available = df_mil[~df_mil["id"].isin(completed_milling_ids)]
+            else:
+                df_mil_available = df_mil.copy()
 
-# Database Connection
-def get_connection():
-    db_path = os.path.join(os.getcwd(), "database.db")
-    return sqlite3.connect(db_path, check_same_thread=False)
+            if st.session_state["edit_fg_id"] is None and df_mil_available.empty:
+                st.success("🎉 Sabhi milling batches ki Finished Goods entry ki ja chuki hai!")
+            else:
+                if st.session_state["edit_fg_id"] is not None:
+                    df_mil_available = df_mil.copy()
 
-def load_data(table_name):
-    conn = get_connection()
-    try:
-        df = pd.read_sql(f"SELECT * FROM {table_name}", conn)
-    except Exception:
-        df = pd.DataFrame()
-    conn.close()
-    return df
+                df_mil_available["label"] = (
+                    "Batch ID: "
+                    + df_mil_available["id"].astype(str)
+                    + " | "
+                    + df_mil_available["miller_name"]
+                    + " ("
+                    + df_mil_available["milling_date"]
+                    + ")"
+                )
+                
+                default_mil_idx = 0
+                if st.session_state["edit_fg_id"] is not None and edit_fg_data is not None:
+                    matched_mil = df_mil_available[df_mil_available["id"] == edit_fg_data["milling_id"]]
+                    if not matched_mil.empty:
+                        matched_label = matched_mil.iloc[0]["label"]
+                        if matched_label in df_mil_available["label"].tolist():
+                            default_mil_idx = df_mil_available["label"].tolist().index(matched_label)
 
-# Create Tables
-def init_db():
-    conn = get_connection()
-    cursor = conn.cursor()
-    # 1. Raw Material Receiving
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS raw_material (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            supplier_name TEXT,
-            date TEXT,
-            item_name TEXT,
-            qty REAL
-        )
-    """)
-    # 2. Milling Table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS milling (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            miller_name TEXT,
-            milling_date TEXT,
-            milling_qty REAL
-        )
-    """)
-    # 3. Finished Goods
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS finished_goods (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            milling_id INTEGER,
-            production_date TEXT,
-            miller_name TEXT,
-            product_code TEXT,
-            total_finished_qty REAL,
-            bran_qty REAL,
-            refraction_qty REAL,
-            yield_pct TEXT,
-            processing_loss_pct TEXT
-        )
-    """)
-    conn.commit()
-    conn.close()
-
-init_db()
-
-# Sidebar Navigation
-st.sidebar.title("Navigation")
-menu = st.sidebar.radio("Go to", [
-    "1. Dashboard", 
-    "2. Raw Material Receiving", 
-    "3. Milling Entry", 
-    "4. Finished Goods", 
-    "5. Master Sheet"
-])
-
-# ==========================================
-# 1. DASHBOARD
-# ==========================================
-if menu == "1. Dashboard":
-    st.header("Dashboard")
-    # Add your metric logic here...
-
-# ==========================================
-# 2. RAW MATERIAL RECEIVING
-# ==========================================
-elif menu == "2. Raw Material Receiving":
-    st.header("Raw Material Receiving")
-    with st.form("rm_form"):
-        supplier = st.text_input("Supplier Name")
-        date = st.date_input("Date")
-        item = st.text_input("Item Name")
-        qty = st.number_input("Quantity (kg)", min_value=0.0)
-        if st.form_submit_button("Save RM"):
-            conn = get_connection()
-            conn.execute("INSERT INTO raw_material (supplier_name, date, item_name, qty) VALUES (?,?,?,?)",
-                         (supplier, str(date), item, qty))
-            conn.commit()
-            conn.close()
-            st.success("Saved!")
-
-# ==========================================
-# 3. MILLING ENTRY
-# ==========================================
-elif menu == "3. Milling Entry":
-    st.header("Milling Entry")
-    # (Aapka existing milling logic yahan rahega)
-
-# ==========================================
-# 4. FINISHED GOODS
-# ==========================================
-elif menu == "4. Finished Goods":
-    st.header("Finished Goods Production")
-    # (Aapka existing FG logic yahan rahega)
-
-# ==========================================
-# 5. MASTER SHEET
-# ==========================================
-elif menu == "5. Master Sheet":
-    st.header("Master Data Sheet")
-    
-    st.subheader("Raw Material Data")
-    st.dataframe(load_data("raw_material"))
-    
-    st.subheader("Milling Data")
-    st.dataframe(load_data("milling"))
-    
-    st.subheader("Finished Goods Data")
-    st.dataframe(load_data("finished_goods"))
-    
-    # Download button for Excel
-    if st.button("Download Master Sheet as CSV"):
-        # Logic to merge and download
-        st.info("Download feature ready.")
+                sel_milling = st.selectbox(
+                    "Select Milling Batch", df_mil_available["label"].tolist(), index=default_mil_idx, key="sel_milling_fg"
+                )
+                
+                if sel_milling is not None:
+                    row_mil = df_mil_available[df_mil_available["label"] == sel_milling].iloc[0]
+                    milling_id = int(row_mil["id"])
+                    miller_name = row_mil["miller_name"]
+                    milling_qty = float(row_mil["milling_qty"])
+                    milling_date_str = row_mil["milling_date"]
