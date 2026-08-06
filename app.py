@@ -163,11 +163,10 @@ if menu == "Month-wise Summary Dashboard":
     if df_rm.empty:
         st.info("Pehle kuch data entries karein tab dashboard show hoga.")
     else:
-        df_rm["Month-Year"] = pd.to_datetime(df_rm["rm_date"]).dt.strftime(
-            "%B %Y"
-        )
+        df_rm["Parsed_Date"] = pd.to_datetime(df_rm["rm_date"], errors="coerce")
+        df_rm["Month-Year"] = df_rm["Parsed_Date"].dt.strftime("%B %Y")
         selected_month = st.selectbox(
-            "Filter by Month-Year", ["All"] + list(df_rm["Month-Year"].unique())
+            "Filter by Month-Year", ["All"] + list(df_rm["Month-Year"].dropna().unique())
         )
         unique_millers = list(df_rm["miller_name"].unique())
         selected_miller = st.selectbox(
@@ -183,9 +182,8 @@ if menu == "Month-wise Summary Dashboard":
 
         df_mil = load_data("milling")
         if not df_mil.empty:
-            df_mil["Month-Year"] = pd.to_datetime(
-                df_mil["milling_date"]
-            ).dt.strftime("%B %Y")
+            df_mil["Parsed_Date"] = pd.to_datetime(df_mil["milling_date"], errors="coerce")
+            df_mil["Month-Year"] = df_mil["Parsed_Date"].dt.strftime("%B %Y")
         f_mil = df_mil.copy()
         if not f_mil.empty:
             if selected_month != "All":
@@ -198,9 +196,8 @@ if menu == "Month-wise Summary Dashboard":
 
         df_fg = load_data("finished_goods")
         if not df_fg.empty:
-            df_fg["Month-Year"] = pd.to_datetime(
-                df_fg["production_date"]
-            ).dt.strftime("%B %Y")
+            df_fg["Parsed_Date"] = pd.to_datetime(df_fg["production_date"], errors="coerce")
+            df_fg["Month-Year"] = df_fg["Parsed_Date"].dt.strftime("%B %Y")
         f_fg = df_fg.copy()
         if not f_fg.empty:
             if selected_month != "All":
@@ -213,9 +210,8 @@ if menu == "Month-wise Summary Dashboard":
 
         df_disp = load_data("dispatch")
         if not df_disp.empty:
-            df_disp["Month-Year"] = pd.to_datetime(
-                df_disp["dispatch_date"]
-            ).dt.strftime("%B %Y")
+            df_disp["Parsed_Date"] = pd.to_datetime(df_disp["dispatch_date"], errors="coerce")
+            df_disp["Month-Year"] = df_disp["Parsed_Date"].dt.strftime("%B %Y")
         f_disp = df_disp.copy()
         if not f_disp.empty:
             if selected_month != "All":
@@ -241,10 +237,9 @@ if menu == "Month-wise Summary Dashboard":
 
         st.divider()
         st.subheader("Raw Material Overview Table")
+        cols_to_drop = [c for c in ["Month-Year", "Parsed_Date"] if c in f_rm.columns]
         st.dataframe(
-            f_rm.drop(columns=["Month-Year"])
-            if "Month-Year" in f_rm.columns
-            else f_rm,
+            f_rm.drop(columns=cols_to_drop),
             use_container_width=True,
         )
 
@@ -254,7 +249,8 @@ elif menu == "1. Raw Material Received":
     with st.form("rm_form", clear_on_submit=True):
         c1, c2, c3 = st.columns(3)
         with c1:
-            rm_date = str(st.date_input("RM Date", datetime.date.today()))
+            raw_date_obj = st.date_input("RM Date", datetime.date.today())
+            rm_date = raw_date_obj.strftime("%d %b %Y")
             vendor_name = st.text_input("Vendor Name", value="")
             vehicle_no = st.text_input(
                 "Vehicle Number", placeholder="e.g. UP-75-AT-5079"
@@ -345,9 +341,8 @@ elif menu == "2. Milling & Quality Lab Entry":
             st.subheader("1. Milling Parameters")
             c1, c2 = st.columns(2)
             with c1:
-                milling_date = str(
-                    st.date_input("Milling Date", datetime.date.today())
-                )
+                mil_date_obj = st.date_input("Milling Date", datetime.date.today())
+                milling_date = mil_date_obj.strftime("%d %b %Y")
                 milling_qty = st.number_input(
                     "Milling Quantity (kg)", min_value=0.0, value=0.0, step=10.0
                 )
@@ -361,9 +356,8 @@ elif menu == "2. Milling & Quality Lab Entry":
             st.subheader("2. Quality Lab Parameters")
             qc1, qc2, qc3 = st.columns(3)
             with qc1:
-                q_date = str(
-                    st.date_input("Lab Test Date", datetime.date.today())
-                )
+                q_date_obj = st.date_input("Lab Test Date", datetime.date.today())
+                q_date = q_date_obj.strftime("%d %b %Y")
                 moisture_milled = st.number_input(
                     "Moisture % (Milled)",
                     min_value=0.0,
@@ -479,9 +473,8 @@ elif menu == "2. Milling & Quality Lab Entry":
                     st.write(
                         f"Updating Quality for Batch ID: {target_m_id} ({t_miller})"
                     )
-                    oq_date = str(
-                        st.date_input("Lab Test Date", datetime.date.today())
-                    )
+                    oq_date_obj = st.date_input("Lab Test Date", datetime.date.today())
+                    oq_date = oq_date_obj.strftime("%d %b %Y")
                     omoisture = st.number_input(
                         "Moisture % (Milled)",
                         min_value=0.0,
@@ -585,10 +578,9 @@ elif menu == "3. Finished Goods & Yield":
         with st.form("fg_form", clear_on_submit=True):
             c1, c2, c3 = st.columns(3)
             with c1:
-                production_date = str(
-                    st.date_input("Production Date", datetime.date.today())
-                )
-                mfd_date = st.text_input("MFD Date", placeholder="e.g. June 2026")
+                prod_date_obj = st.date_input("Production Date", datetime.date.today())
+                production_date = prod_date_obj.strftime("%d %b %Y")
+                mfd_date = st.text_input("MFD Date", placeholder="e.g. Jun 2026")
                 expiry_date = st.text_input(
                     "Expiry Date", placeholder="e.g. 6 Months"
                 )
@@ -711,7 +703,8 @@ elif menu == "4. Better Nutrition Packing Material":
     with st.form("pm_form", clear_on_submit=True):
         c1, c2 = st.columns(2)
         with c1:
-            pm_date = str(st.date_input("Date", datetime.date.today()))
+            pm_date_obj = st.date_input("Date", datetime.date.today())
+            pm_date = pm_date_obj.strftime("%d %b %Y")
             carton_type = st.selectbox(
                 "Carton Type", ["500g Carton", "1kg Carton", "2kg Carton", "5kg Carton"]
             )
@@ -777,9 +770,8 @@ elif menu == "5. Daily Dispatch Entry":
     with st.form("dispatch_form", clear_on_submit=True):
         c1, c2 = st.columns(2)
         with c1:
-            dispatch_date = str(
-                st.date_input("Dispatch Date", datetime.date.today())
-            )
+            disp_date_obj = st.date_input("Dispatch Date", datetime.date.today())
+            dispatch_date = disp_date_obj.strftime("%d %b %Y")
             vehicle_no = st.text_input(
                 "Vehicle Number", placeholder="e.g. UP-32-XZ-1234"
             )
