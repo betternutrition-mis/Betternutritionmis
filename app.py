@@ -82,6 +82,7 @@ def init_db():
     conn = get_connection()
     cursor = conn.cursor()
 
+    # Tables creation with safety checks
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS raw_material (
             id INTEGER PRIMARY KEY AUTOINCREMENT, rm_date TEXT, miller_name TEXT, vendor_name TEXT, vehicle_number TEXT, hectoliter_weight REAL, moisture_rm REAL, broken_pct REAL, infestation TEXT, jute_bags INTEGER, gross_qty REAL, jute_weight REAL, net_weight REAL, remarks TEXT
@@ -781,7 +782,7 @@ elif menu == "4. Better Nutrition Packing Material":
             )
 
     st.subheader("Saved Packing Material Dispatches")
-    df_pm_saved = load_data("packing_material")
+    df_pm_saved = load_load_data = load_data("packing_material")
     if not df_pm_saved.empty:
         st.dataframe(
             df_pm_saved.drop(columns=["id"])
