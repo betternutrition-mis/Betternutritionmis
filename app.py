@@ -71,8 +71,8 @@ BASE_MILLER_LIST = [
     "Other",
 ]
 
-# Database name change kar diya hai taaki naya fresh table bane
-DB_FILE = "flour_mill_erp_v2.db"
+# Wapas purana database naam kar diya hai taaki purana data na khoye
+DB_FILE = "flour_mill_erp.db"
 
 
 def get_connection():
@@ -112,6 +112,13 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT, dispatch_date TEXT, miller_name TEXT, vehicle_no TEXT, disp_500g INTEGER, disp_1kg INTEGER, disp_2kg INTEGER, disp_5kg INTEGER, total_dispatched_wt REAL, cartons_used INTEGER, remarks TEXT
         )
     """)
+
+    # Safety Check: Agar purane table mein 'test_date' column nahi hai, toh ye automatically add kar dega bina data delete kiye
+    try:
+        cursor.execute("ALTER TABLE quality ADD COLUMN test_date TEXT")
+    except Exception:
+        pass  # Agar column pehle se hoga toh error nahi aayega, chupchap aage badh jayega
+
     conn.commit()
     conn.close()
 
@@ -874,17 +881,6 @@ elif menu == "6. Master Records & Export (Admin Controls)":
             "Welcome Admin! Aap yahan kisi bhi table ka record delete kar"
             " sakte hain ya data export kar sakte hain."
         )
-
-        if st.button("⚠️ Reset/Recreate Database Tables (Fix Schema Errors)"):
-            try:
-                os.remove(DB_FILE)
-                init_db()
-                st.success(
-                    "Database successfully reset and recreated without errors!"
-                )
-                st.rerun()
-            except Exception as e:
-                st.error(f"Error: {e}")
 
         tables = [
             "raw_material",
