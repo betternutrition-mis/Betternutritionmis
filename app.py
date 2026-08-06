@@ -1,5 +1,7 @@
 import datetime
 import os
+import smtplib
+from email.message import EmailMessage
 import sqlite3
 import pandas as pd
 import streamlit as st
@@ -8,7 +10,7 @@ st.set_page_config(
     page_title="Better Nutrition & Flour Mill ERP", layout="wide"
 )
 
-# Custom CSS for Modern UI Layout matching your reference
+# Custom CSS for Modern UI Layout
 st.markdown(
     """
     <style>
@@ -50,77 +52,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Top Header Branding Bar
-st.markdown(
-    """
-    <div class="header-container">
-        <div style="display: flex; align-items: center; gap: 12px;">
-            <div style="background-color: #0A2F1D; color: white; padding: 10px 14px; border-radius: 10px; font-weight: bold; font-size: 18px;">BN</div>
-            <div>
-                <h2 style="margin: 0; font-size: 20px; color: #111827;">Better Nutrition</h2>
-                <p style="margin: 0; font-size: 12px; color: #6B7280;">Internal Stock Movement, Receiving, Exceptions & Milling Production</p>
-            </div>
-        </div>
-        <div style="display: flex; gap: 10px;">
-            <span style="background-color: #E6F4EA; color: #137333; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 5px;">🟢 LIVE</span>
-            <span style="border: 1px solid #D1D5DB; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; color: #374151;">Employee ID + PIN</span>
-        </div>
-    </div>
-""",
-    unsafe_allow_html=True,
-)
-
-
-def check_password():
-    def password_entered():
-        entered_pwd = st.session_state["password"]
-        if entered_pwd == "Rishabh@1994":
-            st.session_state["password_correct"] = True
-            st.session_state["role"] = "Admin"
-            del st.session_state["password"]
-        elif entered_pwd == "team123":
-            st.session_state["password_correct"] = True
-            st.session_state["role"] = "Team"
-            del st.session_state["password"]
-        else:
-            st.session_state["password_correct"] = False
-
-    if "password_correct" not in st.session_state:
-        st.text_input(
-            "Password daliye app kholne ke liye:",
-            type="password",
-            on_change=password_entered,
-            key="password",
-        )
-        return False
-    elif not st.session_state["password_correct"]:
-        st.text_input(
-            "Password daliye app kholne ke liye:",
-            type="password",
-            on_change=password_entered,
-            key="password",
-        )
-        st.error("Password galat hai. Dobara koshish karein.")
-        return False
-    else:
-        return True
-
-
-if not check_password():
-    st.stop()
-
-user_role = st.session_state.get("role", "Team")
-st.sidebar.write(f"Logged in as: **{user_role}**")
-
-BASE_MILLER_LIST = [
-    "Shree Balram Agro",
-    "IKON ORG.",
-    "Sathvik Agro",
-    "Satya Naraian Kesho",
-    "Tara Grains",
-    "Other",
-]
-
 
 def get_connection():
     return sqlite3.connect("flour_mill_erp.db", check_same_thread=False)
@@ -131,12 +62,12 @@ def init_db():
     cursor = conn.cursor()
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS raw_material (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, rm_date TEXT, miller_name TEXT, vendor_name TEXT, vehicle_number TEXT, hectoliter_weight REAL, moisture_rm REAL, broken_pct REAL, infestation TEXT, jute_bags INTEGER, gross_qty REAL, jute_weight REAL, net_weight REAL, remarks TEXT
+            id INTEGER PRIMARY KEY AUTOINCREMENT, rm_date TEXT, miller_name TEXT, vendor_name TEXT, vehicle_number TEXT, hectoliter_weight REAL, moisture_rm REAL, broken_pct REAL, infestation TEXT, jute_bags INTEGER, gross_qty REAL, jute_weight REAL, net_weight REAL, remarks TEXT, entered_by TEXT
         )
     """)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS milling (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, milling_date TEXT, miller_name TEXT, milling_qty REAL, tempering_time TEXT, tempering_water REAL
+            id INTEGER PRIMARY KEY AUTOINCREMENT, milling_date TEXT, miller_name TEXT, milling_qty REAL, tempering_time TEXT, tempering_water REAL, entered_by TEXT
         )
     """)
     cursor.execute("""
@@ -148,27 +79,160 @@ def init_db():
         cursor.execute("ALTER TABLE quality ADD COLUMN wap REAL")
     except Exception:
         pass
+    try:
+        cursor.execute("ALTER TABLE raw_material ADD COLUMN entered_by TEXT")
+    except Exception:
+        pass
+    try:
+        cursor.execute("ALTER TABLE milling ADD COLUMN entered_by TEXT")
+    except Exception:
+        pass
 
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS finished_goods (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, milling_id INTEGER, production_date TEXT, miller_name TEXT, mfd_date TEXT, expiry_date TEXT, mrp REAL, product_code TEXT, pouch_500g INTEGER, pouch_1kg INTEGER, pouch_2kg INTEGER, pouch_5kg INTEGER, total_finished_qty REAL, bran_qty REAL, bran_pct TEXT, refraction_qty REAL, refraction_pct TEXT, yield_pct TEXT, processing_loss_pct TEXT
+        CREATE TABLE IF NOT EXISTS employees (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, employee_name TEXT, pin TEXT, role TEXT
         )
     """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS packing_material (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT, miller_name TEXT, carton_type TEXT, cartons_sent INTEGER, tape_sent INTEGER, oxysorb_qty INTEGER, roll_sku TEXT, roll_qty_sent REAL
+    # Default employees add karein agar table khali hai
+    cursor.execute("SELECT COUNT(*) FROM employees")
+    if cursor.fetchone()[0] == 0:
+        cursor.execute(
+            "INSERT INTO employees (employee_name, pin, role) VALUES (?, ?, ?)",
+            ("Yash Sharma", "8358", "Team"),
         )
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS dispatch (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, dispatch_date TEXT, miller_name TEXT, vehicle_no TEXT, disp_500g INTEGER, disp_1kg INTEGER, disp_2kg INTEGER, disp_5kg INTEGER, total_dispatched_wt REAL, cartons_used INTEGER, remarks TEXT
+        cursor.execute(
+            "INSERT INTO employees (employee_name, pin, role) VALUES (?, ?, ?)",
+            ("Dheerendra Bhaskar", "7549", "Team"),
         )
-    """)
-    conn.commit()
+        cursor.execute(
+            "INSERT INTO employees (employee_name, pin, role) VALUES (?, ?, ?)",
+            ("Rishabh Admin", "1994", "Admin"),
+        )
+        conn.commit()
+
     conn.close()
 
 
 init_db()
+
+
+# Email Alert Function
+def send_email_alert(subject, body):
+    try:
+        sender_email = "your_email@gmail.com"  # Apna Gmail yahan daalein
+        sender_password = (
+            "your_app_password"  # Gmail App Password yahan daalein
+        )
+        receiver_email = "rishabh_target_email@gmail.com"  # Jis email par alert chahiye
+
+        msg = EmailMessage()
+        msg.set_content(body)
+        msg.subject = subject
+        msg.from_ = sender_email
+        msg.to = receiver_email
+
+        server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
+        server.login(sender_email, sender_password)
+        server.send_message(msg)
+        server.quit()
+    except Exception as e:
+        print(f"Email error: {e}")
+
+
+# Authentication System using Employee ID + PIN
+def check_auth():
+    if "logged_in" not in st.session_state:
+        st.session_state["logged_in"] = False
+        st.session_state["user_name"] = ""
+        st.session_state["role"] = ""
+
+    if not st.session_state["logged_in"]:
+        st.markdown(
+            """
+            <div class="hero-banner" style="text-align: center;">
+                <h1>Employee Login</h1>
+                <p>Kripya apni Employee ID aur 4-digit PIN darj karein.</p>
+            </div>
+        """,
+            unsafe_allow_html=True,
+        )
+
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            with st.form("login_form"):
+                emp_name_input = st.text_input("Employee Name / ID")
+                emp_pin = st.text_input("4-digit PIN", type="password")
+                submit_login = st.form_submit_button("Login Karein")
+
+                if submit_login:
+                    conn = get_connection()
+                    cursor = conn.cursor()
+                    cursor.execute(
+                        "SELECT employee_name, role FROM employees WHERE employee_name = ? AND pin = ?",
+                        (emp_name_input.strip(), emp_pin.strip()),
+                    )
+                    user = cursor.fetchone()
+                    conn.close()
+
+                    if user:
+                        st.session_state["logged_in"] = True
+                        st.session_state["user_name"] = user[0]
+                        st.session_state["role"] = user[1]
+                        st.success(
+                            f"Swagat hai, {user[0]}! App khul rahi hai..."
+                        )
+                        st.rerun()
+                    else:
+                        st.error("Galat Name ya PIN! Dobara koshish karein.")
+        return False
+    return True
+
+
+if not check_auth():
+    st.stop()
+
+# Top Header Branding Bar
+st.markdown(
+    """
+    <div class="header-container">
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="background-color: #0A2F1D; color: white; padding: 10px 14px; border-radius: 10px; font-weight: bold; font-size: 18px;">BN</div>
+            <div>
+                <h2 style="margin: 0; font-size: 20px; color: #111827;">Better Nutrition</h2>
+                <p style="margin: 0; font-size: 12px; color: #6B7280;">Internal Stock Movement, Receiving, Exceptions & Milling Production</p>
+            </div>
+        </div>
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <span style="background-color: #E6F4EA; color: #137333; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600;">🟢 LIVE</span>
+            <span style="border: 1px solid #D1D5DB; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; color: #374151;">User: {user}</span>
+        </div>
+    </div>
+""".format(
+        user=st.session_state["user_name"]
+    ),
+    unsafe_allow_html=True,
+)
+
+if st.sidebar.button("Logout"):
+    st.session_state["logged_in"] = False
+    st.session_state["user_name"] = ""
+    st.session_state["role"] = ""
+    st.rerun()
+
+user_role = st.session_state.get("role", "Team")
+current_logged_user = st.session_state.get("user_name", "Unknown")
+st.sidebar.write(
+    f"Logged in as: **{current_logged_user}** ({user_role})"
+)
+
+BASE_MILLER_LIST = [
+    "Shree Balram Agro",
+    "IKON ORG.",
+    "Sathvik Agro",
+    "Satya Naraian Kesho",
+    "Tara Grains",
+    "Other",
+]
 
 
 def load_data(table_name):
@@ -350,13 +414,19 @@ elif menu == "1. Raw Material Received":
 
     if not df_rm_saved.empty:
         action_type = st.radio(
-            "Action Mode", ["➕ New Entry", "✏️ Edit / 🗑️ Delete Existing Entry"], horizontal=True, key="mode_rm"
+            "Action Mode",
+            ["➕ New Entry", "✏️ Edit / 🗑️ Delete Existing Entry"],
+            horizontal=True,
+            key="mode_rm",
         )
     else:
         action_type = "➕ New Entry"
 
     edit_data = None
-    if action_type == "✏️ Edit / 🗑️ Delete Existing Entry" and not df_rm_saved.empty:
+    if (
+        action_type == "✏️ Edit / 🗑️ Delete Existing Entry"
+        and not df_rm_saved.empty
+    ):
         df_rm_saved["label"] = (
             "ID: "
             + df_rm_saved["id"].astype(str)
@@ -369,24 +439,38 @@ elif menu == "1. Raw Material Received":
             + " kg"
         )
         selected_row_label = st.selectbox(
-            "Select Raw Material Record to Modify/Delete", df_rm_saved["label"].tolist(), key="sel_rm_edit"
+            "Select Raw Material Record to Modify/Delete",
+            df_rm_saved["label"].tolist(),
+            key="sel_rm_edit",
         )
-        selected_row = df_rm_saved[df_rm_saved["label"] == selected_row_label].iloc[0]
+        selected_row = df_rm_saved[
+            df_rm_saved["label"] == selected_row_label
+        ].iloc[0]
         st.session_state["edit_rm_id"] = int(selected_row["id"])
         edit_data = selected_row
 
         with st.expander("⚠️ Delete Confirmation Box", expanded=False):
-            confirm_del = st.checkbox("Haan, main is record ko permanently delete karna chahta hoon", key="conf_del_rm")
-            if st.button("🗑️ Confirm & Delete Record", type="primary", key="btn_del_rm_rec"):
+            confirm_del = st.checkbox(
+                "Haan, main is record ko permanently delete karna chahta hoon",
+                key="conf_del_rm",
+            )
+            if st.button(
+                "🗑️ Confirm & Delete Record",
+                type="primary",
+                key="btn_del_rm_rec",
+            ):
                 if confirm_del:
                     conn = get_connection()
                     cursor = conn.cursor()
                     cursor.execute(
-                        "DELETE FROM raw_material WHERE id = ?", (st.session_state["edit_rm_id"],)
+                        "DELETE FROM raw_material WHERE id = ?",
+                        (st.session_state["edit_rm_id"],),
                     )
                     conn.commit()
                     conn.close()
-                    st.success(f"Record ID {st.session_state['edit_rm_id']} successfully deleted!")
+                    st.success(
+                        f"Record ID {st.session_state['edit_rm_id']} successfully deleted!"
+                    )
                     st.session_state["edit_rm_id"] = None
                     st.rerun()
                 else:
@@ -394,8 +478,13 @@ elif menu == "1. Raw Material Received":
     else:
         st.session_state["edit_rm_id"] = None
 
-    if action_type == "➕ New Entry" or st.session_state["edit_rm_id"] is not None:
-        default_miller = edit_data["miller_name"] if edit_data is not None else None
+    if (
+        action_type == "➕ New Entry"
+        or st.session_state["edit_rm_id"] is not None
+    ):
+        default_miller = (
+            edit_data["miller_name"] if edit_data is not None else None
+        )
         miller_name = get_miller_input("rm", default_miller)
 
         with st.form("rm_form", clear_on_submit=False):
@@ -421,7 +510,9 @@ elif menu == "1. Raw Material Received":
                     edit_data["vehicle_number"] if edit_data is not None else ""
                 )
                 vehicle_no = st.text_input(
-                    "Vehicle Number", value=default_veh, placeholder="e.g. UP-75-AT-5079"
+                    "Vehicle Number",
+                    value=default_veh,
+                    placeholder="e.g. UP-75-AT-5079",
                 )
             with c2:
                 default_hecto = (
@@ -430,7 +521,11 @@ elif menu == "1. Raw Material Received":
                     else 0.0
                 )
                 hecto_wt = st.number_input(
-                    "Hectoliter Weight", min_value=0.0, value=default_hecto, step=0.1, format="%.1f"
+                    "Hectoliter Weight",
+                    min_value=0.0,
+                    value=default_hecto,
+                    step=0.1,
+                    format="%.1f",
                 )
 
                 default_mois = (
@@ -439,7 +534,11 @@ elif menu == "1. Raw Material Received":
                     else 0.0
                 )
                 moisture_rm = st.number_input(
-                    "Moisture % (RM)", min_value=0.0, value=default_mois, step=0.1, format="%.1f"
+                    "Moisture % (RM)",
+                    min_value=0.0,
+                    value=default_mois,
+                    step=0.1,
+                    format="%.1f",
                 )
 
                 default_broken = (
@@ -448,13 +547,22 @@ elif menu == "1. Raw Material Received":
                     else 0.0
                 )
                 broken_pct = st.number_input(
-                    "Broken %", min_value=0.0, value=default_broken, step=0.1, format="%.1f"
+                    "Broken %",
+                    min_value=0.0,
+                    value=default_broken,
+                    step=0.1,
+                    format="%.1f",
                 )
             with c3:
                 infestation_opts = ["Nil", "Low", "Medium", "High"]
                 default_inf_idx = 0
-                if edit_data is not None and edit_data["infestation"] in infestation_opts:
-                    default_inf_idx = infestation_opts.index(edit_data["infestation"])
+                if (
+                    edit_data is not None
+                    and edit_data["infestation"] in infestation_opts
+                ):
+                    default_inf_idx = infestation_opts.index(
+                        edit_data["infestation"]
+                    )
                 infestation = st.selectbox(
                     "Infestation", infestation_opts, index=default_inf_idx
                 )
@@ -470,10 +578,16 @@ elif menu == "1. Raw Material Received":
                 )
 
                 default_gross = (
-                    float(edit_data["gross_qty"]) if edit_data is not None else 0.0
+                    float(edit_data["gross_qty"])
+                    if edit_data is not None
+                    else 0.0
                 )
                 gross_qty = st.number_input(
-                    "Gross Qty (kg)", min_value=0.0, value=default_gross, step=10.0, format="%.2f"
+                    "Gross Qty (kg)",
+                    min_value=0.0,
+                    value=default_gross,
+                    step=10.0,
+                    format="%.2f",
                 )
 
             default_rem = edit_data["remarks"] if edit_data is not None else ""
@@ -518,14 +632,17 @@ elif menu == "1. Raw Material Received":
                     )
                     conn.commit()
                     conn.close()
-                    st.success(f"Raw Material Record ID {st.session_state['edit_rm_id']} Updated Successfully!")
+                    st.success(
+                        f"Raw Material Record ID {st.session_state['edit_rm_id']}"
+                        " Updated Successfully!"
+                    )
                     st.session_state["edit_rm_id"] = None
                     st.rerun()
                 else:
                     cursor.execute(
                         """
-                        INSERT INTO raw_material (rm_date, miller_name, vendor_name, vehicle_number, hectoliter_weight, moisture_rm, broken_pct, infestation, jute_bags, gross_qty, jute_weight, net_weight, remarks)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO raw_material (rm_date, miller_name, vendor_name, vehicle_number, hectoliter_weight, moisture_rm, broken_pct, infestation, jute_bags, gross_qty, jute_weight, net_weight, remarks, entered_by)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                         (
                             rm_date,
@@ -541,12 +658,21 @@ elif menu == "1. Raw Material Received":
                             round(jute_wt, 2),
                             round(net_wt, 2),
                             remarks,
+                            current_logged_user,
                         ),
                     )
                     conn.commit()
                     conn.close()
+
+                    # Send Email Alert
+                    email_subject = (
+                        f"New RM Entry by {current_logged_user} - {miller_name}"
+                    )
+                    email_body = f"Nayi Raw Material entry darj ki gayi hai:\n\nUser: {current_logged_user}\nMiller: {miller_name}\nNet Weight: {net_wt:,.2f} kg\nDate: {rm_date}"
+                    send_email_alert(email_subject, email_body)
+
                     st.success(
-                        f"RM Saved & Permanently Stored for {miller_name}! Net Weight:"
+                        f"RM Saved & Stored by {current_logged_user}! Net Weight:"
                         f" {net_wt:,.2f} kg"
                     )
 
@@ -574,31 +700,70 @@ elif menu == "2. Milling & Quality Lab Entry":
     action_type_mil = "➕ New Milling & Quality Entry"
     if not df_mil_saved.empty:
         action_type_mil = st.radio(
-            "Action Mode", ["➕ New Milling & Quality Entry", "✏️ Edit / 🗑️ Delete Existing Milling", "🛠️ Update Quality for Old Batches"], horizontal=True, key="mode_mil"
+            "Action Mode",
+            [
+                "➕ New Milling & Quality Entry",
+                "✏️ Edit / 🗑️ Delete Existing Milling",
+                "🛠️ Update Quality for Old Batches",
+            ],
+            horizontal=True,
+            key="mode_mil",
         )
     else:
         action_type_mil = st.radio(
-            "Action Mode", ["➕ New Milling & Quality Entry", "🛠️ Update Quality for Old Batches"], horizontal=True, key="mode_mil_empty"
+            "Action Mode",
+            ["➕ New Milling & Quality Entry", "🛠️ Update Quality for Old Batches"],
+            horizontal=True,
+            key="mode_mil_empty",
         )
 
     edit_mil_data = None
-    if action_type_mil == "✏️ Edit / 🗑️ Delete Existing Milling" and not df_mil_saved.empty:
+    if (
+        action_type_mil == "✏️ Edit / 🗑️ Delete Existing Milling"
+        and not df_mil_saved.empty
+    ):
         df_mil_saved["label"] = (
-            "ID: " + df_mil_saved["id"].astype(str) + " | " + df_mil_saved["miller_name"] + " (" + df_mil_saved["milling_date"] + ")"
+            "ID: "
+            + df_mil_saved["id"].astype(str)
+            + " | "
+            + df_mil_saved["miller_name"]
+            + " ("
+            + df_mil_saved["milling_date"]
+            + ")"
         )
-        sel_edit_mil = st.selectbox("Select Milling Record to Modify/Delete", df_mil_saved["label"].tolist(), key="sel_mil_mod")
-        row_edit_mil = df_mil_saved[df_mil_saved["label"] == sel_edit_mil].iloc[0]
+        sel_edit_mil = st.selectbox(
+            "Select Milling Record to Modify/Delete",
+            df_mil_saved["label"].tolist(),
+            key="sel_mil_mod",
+        )
+        row_edit_mil = df_mil_saved[
+            df_mil_saved["label"] == sel_edit_mil
+        ].iloc[0]
         st.session_state["edit_mil_id"] = int(row_edit_mil["id"])
         edit_mil_data = row_edit_mil
 
         with st.expander("⚠️ Delete Milling Confirmation Box", expanded=False):
-            confirm_del_mil = st.checkbox("Haan, main is milling record aur isse juda quality record delete karna chahta hoon", key="conf_del_mil_rec")
-            if st.button("🗑️ Confirm & Delete Milling", type="primary", key="btn_del_mil_rec"):
+            confirm_del_mil = st.checkbox(
+                "Haan, main is milling record aur isse juda quality record"
+                " delete karna chahta hoon",
+                key="conf_del_mil_rec",
+            )
+            if st.button(
+                "🗑️ Confirm & Delete Milling",
+                type="primary",
+                key="btn_del_mil_rec",
+            ):
                 if confirm_del_mil:
                     conn = get_connection()
                     cursor = conn.cursor()
-                    cursor.execute("DELETE FROM milling WHERE id = ?", (st.session_state["edit_mil_id"],))
-                    cursor.execute("DELETE FROM quality WHERE milling_id = ?", (st.session_state["edit_mil_id"],))
+                    cursor.execute(
+                        "DELETE FROM milling WHERE id = ?",
+                        (st.session_state["edit_mil_id"],),
+                    )
+                    cursor.execute(
+                        "DELETE FROM quality WHERE milling_id = ?",
+                        (st.session_state["edit_mil_id"],),
+                    )
                     conn.commit()
                     conn.close()
                     st.success("Milling Record deleted successfully!")
@@ -610,15 +775,22 @@ elif menu == "2. Milling & Quality Lab Entry":
         if action_type_mil != "✏️ Edit / 🗑️ Delete Existing Milling":
             st.session_state["edit_mil_id"] = None
 
-    if action_type_mil == "➕ New Milling & Quality Entry" or st.session_state["edit_mil_id"] is not None:
-        default_miller_m = edit_mil_data["miller_name"] if edit_mil_data is not None else None
+    if (
+        action_type_mil == "➕ New Milling & Quality Entry"
+        or st.session_state["edit_mil_id"] is not None
+    ):
+        default_miller_m = (
+            edit_mil_data["miller_name"] if edit_mil_data is not None else None
+        )
         miller_name = get_miller_input("milling_q", default_miller_m)
-        
+
         edit_q_data = None
         if st.session_state["edit_mil_id"] is not None:
             df_q_all = load_data("quality")
             if not df_q_all.empty and "milling_id" in df_q_all.columns:
-                q_match = df_q_all[df_q_all["milling_id"] == st.session_state["edit_mil_id"]]
+                q_match = df_q_all[
+                    df_q_all["milling_id"] == st.session_state["edit_mil_id"]
+                ]
                 if not q_match.empty:
                     edit_q_data = q_match.iloc[0]
 
@@ -629,23 +801,45 @@ elif menu == "2. Milling & Quality Lab Entry":
                 default_mdate = datetime.date.today()
                 if edit_mil_data is not None:
                     try:
-                        default_mdate = datetime.datetime.strptime(edit_mil_data["milling_date"], "%d %b %Y").date()
+                        default_mdate = datetime.datetime.strptime(
+                            edit_mil_data["milling_date"], "%d %b %Y"
+                        ).date()
                     except Exception:
                         pass
                 mil_date_obj = st.date_input("Milling Date", default_mdate)
                 milling_date = mil_date_obj.strftime("%d %b %Y")
-                
-                default_mqty = float(edit_mil_data["milling_qty"]) if edit_mil_data is not None else None
+
+                default_mqty = (
+                    float(edit_mil_data["milling_qty"])
+                    if edit_mil_data is not None
+                    else None
+                )
                 milling_qty = st.number_input(
-                    "Milling Quantity (kg)", value=default_mqty, placeholder="Type qty...", step=10.0
+                    "Milling Quantity (kg)",
+                    value=default_mqty,
+                    placeholder="Type qty...",
+                    step=10.0,
                 )
             with c2:
-                default_ttime = edit_mil_data["tempering_time"] if edit_mil_data is not None else ""
-                tempering_time = st.text_input("Tempering Time", value=default_ttime)
-                
-                default_twater = float(edit_mil_data["tempering_water"]) if edit_mil_data is not None else None
+                default_ttime = (
+                    edit_mil_data["tempering_time"]
+                    if edit_mil_data is not None
+                    else ""
+                )
+                tempering_time = st.text_input(
+                    "Tempering Time", value=default_ttime
+                )
+
+                default_twater = (
+                    float(edit_mil_data["tempering_water"])
+                    if edit_mil_data is not None
+                    else None
+                )
                 tempering_water = st.number_input(
-                    "Tempering Water (Ltr)", value=default_twater, placeholder="Type water...", step=10.0
+                    "Tempering Water (Ltr)",
+                    value=default_twater,
+                    placeholder="Type water...",
+                    step=10.0,
                 )
 
             st.divider()
@@ -655,63 +849,116 @@ elif menu == "2. Milling & Quality Lab Entry":
                 default_qdate = datetime.date.today()
                 if edit_q_data is not None:
                     try:
-                        default_qdate = datetime.datetime.strptime(edit_q_data["test_date"], "%d %b %Y").date()
+                        default_qdate = datetime.datetime.strptime(
+                            edit_q_data["test_date"], "%d %b %Y"
+                        ).date()
                     except Exception:
                         pass
                 q_date_obj = st.date_input("Lab Test Date", default_qdate)
                 q_date = q_date_obj.strftime("%d %b %Y")
-                
-                default_mois_m = float(edit_q_data["moisture_milled"]) if edit_q_data is not None else None
+
+                default_mois_m = (
+                    float(edit_q_data["moisture_milled"])
+                    if edit_q_data is not None
+                    else None
+                )
                 moisture_milled = st.number_input(
                     "Moisture % (Milled)",
                     value=default_mois_m,
                     placeholder="Type moisture...",
                     step=0.1,
                 )
-                
-                default_gran = edit_q_data["granulation"] if edit_q_data is not None else ""
+
+                default_gran = (
+                    edit_q_data["granulation"]
+                    if edit_q_data is not None
+                    else ""
+                )
                 granulation = st.text_input("Granulation", value=default_gran)
             with qc2:
-                default_ccl4 = edit_q_data["ccl4"] if edit_q_data is not None else ""
+                default_ccl4 = (
+                    edit_q_data["ccl4"] if edit_q_data is not None else ""
+                )
                 ccl4 = st.text_input("CCL4", value=default_ccl4)
-                
-                default_ash = float(edit_q_data["ash_aia"]) if edit_q_data is not None else None
+
+                default_ash = (
+                    float(edit_q_data["ash_aia"])
+                    if edit_q_data is not None
+                    else None
+                )
                 ash_aia = st.number_input(
-                    "Ash + AIA", value=default_ash, placeholder="Type ash...", step=0.01, format="%.3f"
-                )
-                
-                default_acid = float(edit_q_data["alcoholic_acidity"]) if edit_q_data is not None else None
-                alcoholic_acidity = st.number_input(
-                    "Alcoholic Acidity", value=default_acid, placeholder="Type acidity...", step=0.001, format="%.4f"
-                )
-            with qc3:
-                default_wap = float(edit_q_data["wap"]) if edit_q_data is not None else None
-                wap = st.number_input(
-                    "WAP", value=default_wap, placeholder="Type WAP...", step=0.01, format="%.2f"
-                )
-                
-                default_gluten = edit_q_data["gluten"] if edit_q_data is not None else ""
-                gluten = st.text_input("Gluten", value=default_gluten)
-                
-                sensory_opts = ["Excellent", "Good", "Average", "Poor"]
-                default_sens_idx = 0
-                if edit_q_data is not None and edit_q_data["chapati_sensory"] in sensory_opts:
-                    default_sens_idx = sensory_opts.index(edit_q_data["chapati_sensory"])
-                chapati_sensory = st.selectbox(
-                    "Chapati Sensory",
-                    sensory_opts,
-                    index=default_sens_idx
+                    "Ash + AIA",
+                    value=default_ash,
+                    placeholder="Type ash...",
+                    step=0.01,
+                    format="%.3f",
                 )
 
-            btn_label_mil = "Update Milling & Quality Data" if st.session_state["edit_mil_id"] is not None else "Save Milling & Quality Data"
+                default_acid = (
+                    float(edit_q_data["alcoholic_acidity"])
+                    if edit_q_data is not None
+                    else None
+                )
+                alcoholic_acidity = st.number_input(
+                    "Alcoholic Acidity",
+                    value=default_acid,
+                    placeholder="Type acidity...",
+                    step=0.001,
+                    format="%.4f",
+                )
+            with qc3:
+                default_wap = (
+                    float(edit_q_data["wap"])
+                    if edit_q_data is not None
+                    else None
+                )
+                wap = st.number_input(
+                    "WAP",
+                    value=default_wap,
+                    placeholder="Type WAP...",
+                    step=0.01,
+                    format="%.2f",
+                )
+
+                default_gluten = (
+                    edit_q_data["gluten"] if edit_q_data is not None else ""
+                )
+                gluten = st.text_input("Gluten", value=default_gluten)
+
+                sensory_opts = ["Excellent", "Good", "Average", "Poor"]
+                default_sens_idx = 0
+                if (
+                    edit_q_data is not None
+                    and edit_q_data["chapati_sensory"] in sensory_opts
+                ):
+                    default_sens_idx = sensory_opts.index(
+                        edit_q_data["chapati_sensory"]
+                    )
+                chapati_sensory = st.selectbox(
+                    "Chapati Sensory", sensory_opts, index=default_sens_idx
+                )
+
+            btn_label_mil = (
+                "Update Milling & Quality Data"
+                if st.session_state["edit_mil_id"] is not None
+                else "Save Milling & Quality Data"
+            )
             submit_both = st.form_submit_button(label=btn_label_mil)
-            
+
             if submit_both:
-                final_mil_qty = milling_qty if milling_qty is not None else 0.0
-                final_temp_water = tempering_water if tempering_water is not None else 0.0
-                final_mois_milled = moisture_milled if moisture_milled is not None else 0.0
+                final_mil_qty = (
+                    milling_qty if milling_qty is not None else 0.0
+                )
+                final_temp_water = (
+                    tempering_water if tempering_water is not None else 0.0
+                )
+                final_mois_milled = (
+                    moisture_milled if moisture_milled is not None else 0.0
+                )
                 final_ash = ash_aia if ash_aia is not None else 0.0
-                final_acidity = alcoholic_acidity if alcoholic_acidity is not None else 0.0
+                final_acidity = (
+                    alcoholic_acidity if alcoholic_acidity is not None else 0.0
+                )
                 final_wap = wap if wap is not None else 0.0
 
                 conn = get_connection()
@@ -776,14 +1023,17 @@ elif menu == "2. Milling & Quality Lab Entry":
                         )
                     conn.commit()
                     conn.close()
-                    st.success(f"Milling & Quality Data Updated Successfully for Batch ID {st.session_state['edit_mil_id']}!")
+                    st.success(
+                        f"Milling & Quality Data Updated Successfully for Batch ID"
+                        f" {st.session_state['edit_mil_id']}!"
+                    )
                     st.session_state["edit_mil_id"] = None
                     st.rerun()
                 else:
                     cursor.execute(
                         """
-                        INSERT INTO milling (milling_date, miller_name, milling_qty, tempering_time, tempering_water)
-                        VALUES (?, ?, ?, ?, ?)
+                        INSERT INTO milling (milling_date, miller_name, milling_qty, tempering_time, tempering_water, entered_by)
+                        VALUES (?, ?, ?, ?, ?, ?)
                     """,
                         (
                             milling_date,
@@ -791,6 +1041,7 @@ elif menu == "2. Milling & Quality Lab Entry":
                             final_mil_qty,
                             tempering_time,
                             final_temp_water,
+                            current_logged_user,
                         ),
                     )
                     milling_id = cursor.lastrowid
@@ -815,8 +1066,15 @@ elif menu == "2. Milling & Quality Lab Entry":
                     )
                     conn.commit()
                     conn.close()
+
+                    # Send Email Alert
+                    email_subject = f"New Milling Entry by {current_logged_user} - {miller_name}"
+                    email_body = f"Nayi Milling entry darj ki gayi hai:\n\nUser: {current_logged_user}\nMiller: {miller_name}\nMilling Qty: {final_mil_qty:,.2f} kg\nDate: {milling_date}"
+                    send_email_alert(email_subject, email_body)
+
                     st.success(
-                        f"Milling & Quality Data Successfully Saved for {miller_name}!"
+                        f"Milling & Quality Data Successfully Saved by"
+                        f" {current_logged_user}!"
                     )
                     st.rerun()
 
@@ -839,7 +1097,8 @@ elif menu == "2. Milling & Quality Lab Entry":
 
             if df_pending_q.empty:
                 st.success(
-                    "Sabhi milling batches ke liye quality data already entered hai!"
+                    "Sabhi milling batches ke liye quality data already entered"
+                    " hai!"
                 )
             else:
                 df_pending_q["label"] = (
@@ -983,4 +1242,11 @@ elif menu == "5. Daily Dispatch Entry":
 
 elif menu == "6. Master Records & Export (Admin Controls)":
     st.subheader("Admin Controls & Master Records Export")
-    st.info("Admin Controls module active hai.")
+    if current_logged_user != "Rishabh Admin":
+        st.warning(
+            "Yeh section sirf Admin (Rishabh Admin) ke liye accessible hai."
+        )
+    else:
+        st.write("Manage Employees & PINs here:")
+        df_emp = load_data("employees")
+        st.dataframe(df_emp, use_container_width=True)
