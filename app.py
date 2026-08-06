@@ -826,8 +826,7 @@ elif menu == "7. Master Records & Export (Admin Controls)":
     if st.session_state.get("role") != "Admin":
         st.error(
             "Yeh section sirf Admin ke liye hai! Aapne 'Team' password"
-            " se login kiya hai, isliye yahan edit/delete controls hidden"
-            " hain."
+            " se login kiya hai, isliye yahan controls hidden hain."
         )
 
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
@@ -847,6 +846,7 @@ elif menu == "7. Master Records & Export (Admin Controls)":
         if df.empty:
             st.info("No data found.")
             return
+
         st.download_button(
             f"Download {report_title} CSV",
             df.drop(columns=["id"]).to_csv(index=False).encode("utf-8"),
@@ -856,122 +856,42 @@ elif menu == "7. Master Records & Export (Admin Controls)":
         st.divider()
 
         if st.session_state.get("role") == "Admin":
-            st.subheader(f"Manage {report_title} Records (Admin Edit & Delete)")
-            for index, row in df.iterrows():
-                row_id = row["id"]
-                date_val = row.get(
-                    "rm_date",
-                    row.get(
-                        "milling_date",
-                        row.get("date", row.get("production_date", "")),
-                    ),
-                )
-                miller_val = row.get("miller_name", "")
-                with st.expander(
-                    f"ID: {row_id} | Date: {date_val} | Miller: {miller_val}"
-                ):
-                    edit_mode_key = f"edit_mode_{table_name}_{row_id}"
-                    if edit_mode_key not in st.session_state:
-                        st.session_state[edit_mode_key] = False
+            st.subheader(
+                f"Live Edit & Delete {report_title} Records (Admin Controls)"
+            )
+            st.info(
+                "Aap neeche table mein seedhe click karke kisi bhi cell ko edit"
+                " kar sakte hain. Changes save karne ke liye 'Save Table"
+                " Changes' button dabayein."
+            )
 
-                    c_btn1, c_btn2 = st.columns(2)
-                    with c_btn1:
-                        if st.button(
-                            "Edit Record", key=f"btn_edit_{table_name}_{row_id}"
-                        ):
-                            st.session_state[edit_mode_key] = (
-                                not st.session_state[edit_mode_key]
-                            )
-                            st.rerun()
-                    with c_btn2:
-                        del_confirm_key = (
-                            f"del_confirm_{table_name}_{row_id}"
-                        )
-                        if del_confirm_key not in st.session_state:
-                            st.session_state[del_confirm_key] = False
-                        if not st.session_state[del_confirm_key]:
-                            if st.button(
-                                "Delete", key=f"btn_del_{table_name}_{row_id}"
-                            ):
-                                st.session_state[del_confirm_key] = True
-                                st.rerun()
-                        else:
-                            st.warning(
-                                "Kya aap sach mein is entry ko delete"
-                                " karna chahte hain?"
-                            )
-                            yb1, yb2 = st.columns(2)
-                            with yb1:
-                                if st.button(
-                                    "Haan, Delete Karo",
-                                    key=f"confirm_del_{table_name}_{row_id}",
-                                ):
-                                    conn = get_connection()
-                                    cursor = conn.cursor()
-                                    cursor.execute(
-                                        f"DELETE FROM {table_name} WHERE id = ?",
-                                        (row_id,),
-                                    )
-                                    conn.commit()
-                                    conn.close()
-                                    st.session_state[del_confirm_key] = False
-                                    st.success(
-                                        f"Deleted ID {row_id} successfully!"
-                                    )
-                                    st.rerun()
-                            with yb2:
-                                if st.button(
-                                    "Nahi, Rehne Do",
-                                    key=f"cancel_del_{table_name}_{row_id}",
-                                ):
-                                    st.session_state[del_confirm_key] = False
-                                    st.rerun()
+            edited_df = st.data_editor(
+                df, key=f"editor_{table_name}", num_rows="dynamic"
+            )
 
-                    if st.session_state[edit_mode_key]:
-                        st.write(f"**Editing ID {row_id}**")
-                        with st.form(key=f"update_form_{table_name}_{row_id}"):
-                            updated_data = {}
-                            for col_name in df.columns:
-                                if col_name == "id":
-                                    continue
-                                val = row[col_name]
-                                if isinstance(val, (int, float)):
-                                    updated_data[col_name] = st.number_input(
-                                        col_name, value=float(val)
-                                    )
-                                else:
-                                    updated_data[col_name] = st.text_input(
-                                        col_name, value=str(val)
-                                    )
-                            update_submit = st.form_submit_button(
-                                "Save Changes (Update)"
-                            )
-                            if update_submit:
-                                conn = get_connection()
-                                cursor = conn.cursor()
-                                set_clause = ", ".join(
-                                    [f"{k} = ?" for k in updated_data.keys()]
-                                )
-                                values = list(updated_data.values()) + [
-                                    row_id
-                                ]
-                                cursor.execute(
-                                    f"UPDATE {table_name} SET {set_clause} WHERE id = ?",
-                                    values,
-                                )
-                                conn.commit()
-                                conn.close()
-                                st.session_state[edit_mode_key] = False
-                                st.success(
-                                    f"ID {row_id} updated successfully!"
-                                )
-                                st.rerun()
-            st.divider()
-        st.subheader(f"Full {report_title} Table View")
-        st.dataframe(
-            df.drop(columns=["id"]) if "id" in df.columns else df,
-            use_container_width=True,
-        )
+            if st.button(
+                f"Save Changes to {report_title}", key=f"save_{table_name}"
+            ):
+                try:
+                    conn = get_connection()
+                    # Overwrite table with updated dataframe safely
+                    edited_df.to_sql(
+                        table_name, conn, if_exists="replace", index=False
+                    )
+                    conn.close()
+                    st.success(
+                        f"{report_title} records successfully updated and"
+                        " saved!"
+                    )
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error saving data: {e}")
+        else:
+            st.subheader(f"Full {report_title} Table View")
+            st.dataframe(
+                df.drop(columns=["id"]) if "id" in df.columns else df,
+                use_container_width=True,
+            )
 
     with tab1:
         handle_admin_table_view(
