@@ -85,7 +85,7 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT, entry_date TEXT, miller_name TEXT, bag_size TEXT, received_bags INTEGER, issued_bags INTEGER, balance_bags INTEGER, remarks TEXT, entered_by TEXT
         )
     """)
-    # Updated Dispatch table with updated SKU breakdown columns (500g, 1kg, 2kg, 5kg)
+    # Updated Dispatch table with corrected SKU labels (pouches/bags updated to pouch for 500g & 5kg, bag for 1kg & 2kg)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS dispatch (
             id INTEGER PRIMARY KEY AUTOINCREMENT, dispatch_date TEXT, miller_name TEXT, party_name TEXT, vehicle_number TEXT, pouches_500g INTEGER, bags_1kg INTEGER, bags_2kg INTEGER, pouches_5kg INTEGER, other_qty REAL, total_dispatched_wt REAL, remarks TEXT, entered_by TEXT
@@ -1545,7 +1545,7 @@ elif menu == "4. Better Nutrition Packing Material":
             + df_pm_saved["bag_size"]
             + " | Bal: "
             + df_pm_saved["balance_bags"].astype(str)
-            + " bags"
+            + " units"
         )
         selected_pm_label = st.selectbox(
             "Select Packing Material Record to Modify/Delete",
@@ -1610,6 +1610,7 @@ elif menu == "4. Better Nutrition Packing Material":
                 entry_date_obj = st.date_input("Entry Date", value=default_edate)
                 entry_date = entry_date_obj.strftime("%d %b %Y")
 
+                # Corrected Packing Material SKU labels (500g pouch, 1kg bag, 2kg bag, 5kg pouch)
                 bag_sizes = ["500g Pouch", "1kg Bag", "2kg Bag", "5kg Pouch", "Other"]
                 default_bs_idx = 0
                 if (
@@ -1618,7 +1619,7 @@ elif menu == "4. Better Nutrition Packing Material":
                 ):
                     default_bs_idx = bag_sizes.index(edit_pm_data["bag_size"])
                 bag_size = st.selectbox(
-                    "Bag / Pouch Size", bag_sizes, index=default_bs_idx
+                    "Pouch / Bag Size", bag_sizes, index=default_bs_idx
                 )
 
                 default_rec_bags = (
@@ -1717,7 +1718,7 @@ Neeche nayi Packing Material entry ki poori report di gayi hai:
 • Entry Date: {entry_date}
 • Entered By (User): {current_logged_user}
 • Miller Name: {miller_name}
-• Bag Size: {bag_size}
+• Pouch / Bag Size: {bag_size}
 • Received Quantity: {received_bags}
 • Issued Quantity: {issued_bags}
 • Balance Quantity: {balance_bags}
@@ -1743,7 +1744,7 @@ elif menu == "5. Daily Dispatch Entry":
         """
         <div class="hero-banner">
             <h1>Daily Dispatch Entry</h1>
-            <p>Record finished goods dispatches, party names, vehicle numbers, and SKU breakdown (500g, 1kg, 2kg, 5kg).</p>
+            <p>Record finished goods dispatches, party names, vehicle numbers, and SKU breakdown (500g Pouch, 1kg Bag, 2kg Bag, 5kg Pouch).</p>
         </div>
     """,
         unsafe_allow_html=True,
@@ -1886,6 +1887,7 @@ elif menu == "5. Daily Dispatch Entry":
                     if edit_disp_data is not None and "bags_2kg" in edit_disp_data and pd.notnull(edit_disp_data["bags_2kg"])
                     else 0
                 )
+                # Corrected label for 2kg (now correctly labeled as 2 kg Bags)
                 bags_2kg = st.number_input(
                     "2 kg Bags Count",
                     min_value=0,
@@ -1898,6 +1900,7 @@ elif menu == "5. Daily Dispatch Entry":
                     if edit_disp_data is not None and "pouches_5kg" in edit_disp_data and pd.notnull(edit_disp_data["pouches_5kg"])
                     else 0
                 )
+                # Corrected label for 5kg (now correctly labeled as 5 kg Pouches)
                 pouches_5kg = st.number_input(
                     "5 kg Pouches Count",
                     min_value=0,
@@ -1931,7 +1934,7 @@ elif menu == "5. Daily Dispatch Entry":
             submit_dispatch = st.form_submit_button(label=btn_disp_label)
 
             if submit_dispatch:
-                # Weight calculation based on 500g (0.5kg), 1kg, 2kg, 5kg
+                # Weight calculation based on 500g pouch, 1kg bag, 2kg bag, 5kg pouch
                 total_dispatched_wt = (
                     (pouches_500g * 0.5)
                     + (bags_1kg * 1.0)
