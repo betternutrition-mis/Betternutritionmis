@@ -85,9 +85,10 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT, entry_date TEXT, miller_name TEXT, bag_size TEXT, received_bags INTEGER, issued_bags INTEGER, balance_bags INTEGER, remarks TEXT, entered_by TEXT
         )
     """)
+    # Updated Dispatch table with SKU breakdown columns
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS dispatch (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, dispatch_date TEXT, miller_name TEXT, party_name TEXT, vehicle_number TEXT, item_name TEXT, bags_dispatched INTEGER, total_dispatched_wt REAL, remarks TEXT, entered_by TEXT
+            id INTEGER PRIMARY KEY AUTOINCREMENT, dispatch_date TEXT, miller_name TEXT, party_name TEXT, vehicle_number TEXT, bags_30kg INTEGER, bags_10kg INTEGER, pouches_5kg INTEGER, other_qty REAL, total_dispatched_wt REAL, remarks TEXT, entered_by TEXT
         )
     """)
 
@@ -100,6 +101,10 @@ def init_db():
         "ALTER TABLE finished_goods ADD COLUMN entered_by TEXT",
         "ALTER TABLE packing_material ADD COLUMN entered_by TEXT",
         "ALTER TABLE dispatch ADD COLUMN entered_by TEXT",
+        "ALTER TABLE dispatch ADD COLUMN bags_30kg INTEGER",
+        "ALTER TABLE dispatch ADD COLUMN bags_10kg INTEGER",
+        "ALTER TABLE dispatch ADD COLUMN pouches_5kg INTEGER",
+        "ALTER TABLE dispatch ADD COLUMN other_qty REAL",
     ]:
         try:
             cursor.execute(col_query)
@@ -1510,7 +1515,7 @@ elif menu == "5. Daily Dispatch Entry":
         """
         <div class="hero-banner">
             <h1>Daily Dispatch Entry & Management</h1>
-            <p>Log outgoing stock dispatches, party names, vehicles, and total dispatched weights.</p>
+            <p>Log outgoing stock dispatches SKU-wise with automatic total weight calculation.</p>
         </div>
     """,
         unsafe_allow_html=True,
@@ -1527,17 +1532,34 @@ elif menu == "5. Daily Dispatch Entry":
             dispatch_date = disp_date_obj.strftime("%d %b %Y")
 
             party_name = st.text_input("Party Name / Customer Name")
-            vehicle_no = st.text_input("Vehicle Number", placeholder="e.g. UP-75-XYZ-1234")
+            vehicle_no = st.text_input(
+                "Vehicle Number", placeholder="e.g. UP-75-XYZ-1234"
+            )
         with c2:
-            item_name = st.selectbox(
-                "Item Dispatched", ["Flour", "Bran", "Chokar", "Mixed / Other"]
-            )
-            bags_dispatched = st.number_input(
-                "Bags Dispatched", min_value=0, step=1
-            )
-            total_dispatched_wt = st.number_input(
-                "Total Dispatched Weight (kg)", min_value=0.0, step=10.0
-            )
+            st.write("**SKU-wise Number of Pouches / Bags**")
+            sc1, sc2 = st.columns(2)
+            with sc1:
+                bags_30kg = st.number_input(
+                    "30 kg Bags", min_value=0, step=1, value=0
+                )
+                bags_10kg = st.number_input(
+                    "10 kg Bags", min_value=0, step=1, value=0
+                )
+            with sc2:
+                pouches_5kg = st.number_input(
+                    "5 kg Pouches", min_value=0, step=1, value=0
+                )
+                other_qty = st.number_input(
+                    "Other / Loose Qty (kg)",
+                    min_value=0.0,
+                    step=1.0,
+                    value=0.0,
+                )
+
+        # Auto Calculate Total Weight based on SKU quantities
+        auto_total_wt = (bags_30kg * 30.0) + (bags_10kg * 10.0) + (pouches_5kg * 5.0) + other_qty
+
+        st.info(f"📦 **Auto-Calculated Total Dispatched Weight:** {auto_total_wt:,.2f} kg")
 
         remarks = st.text_input("Dispatch Remarks")
         submit_disp = st.form_submit_button("Save Dispatch Entry")
@@ -1547,17 +1569,19 @@ elif menu == "5. Daily Dispatch Entry":
             cursor = conn.cursor()
             cursor.execute(
                 """
-                INSERT INTO dispatch (dispatch_date, miller_name, party_name, vehicle_number, item_name, bags_dispatched, total_dispatched_wt, remarks, entered_by)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO dispatch (dispatch_date, miller_name, party_name, vehicle_number, bags_30kg, bags_10kg, pouches_5kg, other_qty, total_dispatched_wt, remarks, entered_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
                 (
                     dispatch_date,
                     miller_name,
                     party_name,
                     vehicle_no,
-                    item_name,
-                    bags_dispatched,
-                    total_dispatched_wt,
+                    bags_30kg,
+                    bags_10kg,
+                    pouches_5kg,
+                    other_qty,
+                    round(auto_total_wt, 2),
                     remarks,
                     current_logged_user,
                 ),
@@ -1579,10 +1603,12 @@ Neeche nayi Dispatch entry ki poori report di gayi hai:
 • Party / Customer Name: {party_name}
 • Vehicle Number: {vehicle_no}
 
-DISPATCH DETAILS:
-• Item Dispatched: {item_name}
-• Bags Dispatched: {bags_dispatched:,}
-• Total Dispatched Weight: {total_dispatched_wt:,.2f} kg
+SKU-WISE DISPATCH BREAKDOWN:
+• 30 kg Bags: {bags_30kg:,}
+• 10 kg Bags: {bags_10kg:,}
+• 5 kg Pouches: {pouches_5kg:,}
+• Other / Loose Qty: {other_qty:,.2f} kg
+• Total Dispatched Weight: {auto_total_wt:,.2f} kg
 • Remarks: {remarks}
 
 ==============================================
@@ -1590,8 +1616,7 @@ Yeh email Better Nutrition ERP System se automatically bheji gayi hai.
 """
             send_email_alert(email_subject, email_body)
             st.success(
-                f"Dispatch Entry Successfully Saved by {current_logged_user}!"
-                " Email report sent to Admin."
+                f"Dispatch Entry Successfully Saved by {current_logged_user}! Total Wt: {auto_total_wt:,.2f} kg. Email report sent to Admin."
             )
             st.rerun()
 
