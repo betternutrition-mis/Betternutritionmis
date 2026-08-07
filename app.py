@@ -91,22 +91,20 @@ def init_db():
         )
     """)
 
-    try:
-        cursor.execute("ALTER TABLE quality ADD COLUMN wap REAL")
-    except Exception:
-        pass
-    try:
-        cursor.execute("ALTER TABLE raw_material ADD COLUMN entered_by TEXT")
-    except Exception:
-        pass
-    try:
-        cursor.execute("ALTER TABLE milling ADD COLUMN entered_by TEXT")
-    except Exception:
-        pass
-    try:
-        cursor.execute("ALTER TABLE milling ADD COLUMN finished_qty REAL")
-    except Exception:
-        pass
+    # Safe Column Alter Migrations for existing DBs
+    for col_query in [
+        "ALTER TABLE quality ADD COLUMN wap REAL",
+        "ALTER TABLE raw_material ADD COLUMN entered_by TEXT",
+        "ALTER TABLE milling ADD COLUMN entered_by TEXT",
+        "ALTER TABLE milling ADD COLUMN finished_qty REAL",
+        "ALTER TABLE finished_goods ADD COLUMN entered_by TEXT",
+        "ALTER TABLE packing_material ADD COLUMN entered_by TEXT",
+        "ALTER TABLE dispatch ADD COLUMN entered_by TEXT",
+    ]:
+        try:
+            cursor.execute(col_query)
+        except Exception:
+            pass
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS employees (
