@@ -840,16 +840,6 @@ elif menu == "2. Milling & Quality Lab Entry":
         )
         miller_name = get_miller_input("milling_q", default_miller_m)
 
-        edit_q_data = None
-        if st.session_state["edit_mil_id"] is not None:
-            df_q_all = load_data("quality")
-            if not df_q_all.empty and "milling_id" in df_q_all.columns:
-                q_match = df_q_all[
-                    df_q_all["milling_id"] == st.session_state["edit_mil_id"]
-                ]
-                if not q_match.empty:
-                    edit_q_data = q_match.iloc[0]
-
         with st.form("milling_quality_form", clear_on_submit=False):
             st.subheader("1. Milling Parameters & Finished Goods Quantity")
             c1, c2 = st.columns(2)
@@ -1051,7 +1041,7 @@ elif menu == "3. Finished Goods & Yield":
         """
         <div class="hero-banner">
             <h1>Finished Goods & Yield Production</h1>
-            <p>Log daily SKU pouches, wheat bran, chokar output, and calculate process yields.</p>
+            <p>Select multiple SKUs simultaneously, enter quantities, and track outputs seamlessly.</p>
         </div>
     """,
         unsafe_allow_html=True,
@@ -1104,7 +1094,7 @@ elif menu == "3. Finished Goods & Yield":
         miller_name = get_miller_input("finished_goods", default_miller_fg)
 
         with st.form("finished_goods_form", clear_on_submit=False):
-            c1, c2, c3 = st.columns(3)
+            c1, c2 = st.columns(2)
             with c1:
                 default_pdate = datetime.date.today()
                 if edit_fg_data is not None:
@@ -1115,22 +1105,10 @@ elif menu == "3. Finished Goods & Yield":
                 prod_date_obj = st.date_input("Production Date", value=default_pdate)
                 production_date = prod_date_obj.strftime("%d %b %Y")
 
-                sku_options = ["500g Pouch", "1kg Bag", "2kg Bag", "5kg Pouch", "10kg Bag", "30kg Bag", "50kg Bag", "Other"]
-                default_sku_idx = 0
-                if edit_fg_data is not None and edit_fg_data["sku"] in sku_options:
-                    default_sku_idx = sku_options.index(edit_fg_data["sku"])
-                sku = st.selectbox("SKU Size / Type", sku_options, index=default_sku_idx)
-
-                default_mrp = float(edit_fg_data["mrp"]) if edit_fg_data is not None and pd.notna(edit_fg_data["mrp"]) else 0.0
-                mrp = st.number_input("MRP (₹)", min_value=0.0, value=default_mrp, step=5.0, format="%.2f")
-
-            with c2:
-                default_qp = int(edit_fg_data["qty_in_pouches"]) if edit_fg_data is not None and pd.notna(edit_fg_data["qty_in_pouches"]) else 0
-                qty_in_pouches = st.number_input("Quantity in Pouches / Bags (Count)", min_value=0, value=default_qp, step=10)
-
                 default_bcode = edit_fg_data["batch_code"] if edit_fg_data is not None and pd.notna(edit_fg_data["batch_code"]) else ""
                 batch_code = st.text_input("Batch Code", value=default_bcode, placeholder="e.g. BN-BATCH-001")
 
+            with c2:
                 default_mfd = datetime.date.today()
                 if edit_fg_data is not None and pd.notna(edit_fg_data["mfd_date"]):
                     try:
@@ -1140,7 +1118,6 @@ elif menu == "3. Finished Goods & Yield":
                 mfd_obj = st.date_input("MFD Date", value=default_mfd)
                 mfd_date = mfd_obj.strftime("%d %b %Y")
 
-            with c3:
                 default_ubd = datetime.date.today() + datetime.timedelta(days=90)
                 if edit_fg_data is not None and pd.notna(edit_fg_data["use_by_date"]):
                     try:
@@ -1150,9 +1127,59 @@ elif menu == "3. Finished Goods & Yield":
                 ubd_obj = st.date_input("Use By / Expiry Date", value=default_ubd)
                 use_by_date = ubd_obj.strftime("%d %b %Y")
 
+            st.divider()
+            st.subheader("SKU Multi-Row Selection (Mapper)")
+
+            sku_choices = ["Select", "500gm", "1kg", "2kg", "5kg"]
+            sku_mapper = {"500gm": 0.5, "1kg": 1.0, "2kg": 2.0, "5kg": 5.0}
+
+            sku_rows_data = []
+            
+            # We provide 4 configurable rows matching the user's reference UI image exactly
+            for i in range(1, 5):
+                st.markdown(f"**SKU {i}**")
+                rc1, rc2, rc3, rc4 = st.columns([2, 1.5, 1.5, 1.5])
+                
+                # Pre-load values if editing
+                def_sku_val = "Select"
+                def_qty_val = 0
+                if edit_fg_data is not None and i == 1 and pd.notna(edit_fg_data["sku"]):
+                    def_sku_val = edit_fg_data["sku"] if edit_fg_data["sku"] in sku_choices else "Select"
+                    def_qty_val = int(edit_fg_data["qty_in_pouches"]) if pd.notna(edit_fg_data["qty_in_pouches"]) else 0
+
+                with rc1:
+                    chosen_sku = st.selectbox(f"SKU {i} *", sku_choices, index=sku_choices.index(def_sku_val) if def_sku_val in sku_choices else 0, key=f"sku_choice_{i}")
+                
+                unit_kg = sku_mapper.get(chosen_sku, 0.0)
+                
+                with rc2:
+                    st.text_input(f"UNIT KG {i}", value=str(unit_kg) if chosen_sku != "Select" else "Auto from SKU mapper", disabled=True, key=f"unit_kg_display_{i}")
+                
+                with rc3:
+                    qty_val = st.number_input(f"QTY {i}", min_value=0, value=def_qty_val if i == 1 else 0, step=1, key=f"qty_input_{i}")
+                
+                total_kg = unit_kg * qty_val
+                
+                with rc4:
+                    st.text_input(f"TOTAL KG {i}", value=f"{total_kg:.2f}" if chosen_sku != "Select" else "", disabled=True, key=f"total_kg_display_{i}")
+
+                if chosen_sku != "Select" and qty_val > 0:
+                    sku_rows_data.append({
+                        "sku": chosen_sku,
+                        "unit_kg": unit_kg,
+                        "qty": qty_val,
+                        "total_kg": total_kg
+                    })
+                st.markdown("---")
+
+            c_extra1, c_extra2, c_extra3 = st.columns(3)
+            with c_extra1:
+                default_mrp = float(edit_fg_data["mrp"]) if edit_fg_data is not None and pd.notna(edit_fg_data["mrp"]) else 0.0
+                mrp = st.number_input("MRP (₹) [General]", min_value=0.0, value=default_mrp, step=5.0, format="%.2f")
+            with c_extra2:
                 default_bran = float(edit_fg_data["bran_qty"]) if edit_fg_data is not None and pd.notna(edit_fg_data["bran_qty"]) else 0.0
                 bran_qty = st.number_input("Wheat Bran / Liker Qty (kg)", min_value=0.0, value=default_bran, step=10.0, format="%.2f")
-
+            with c_extra3:
                 default_chok = float(edit_fg_data["chokar_qty"]) if edit_fg_data is not None and pd.notna(edit_fg_data["chokar_qty"]) else 0.0
                 chokar_qty = st.number_input("Chokar Qty (kg)", min_value=0.0, value=default_chok, step=10.0, format="%.2f")
 
@@ -1163,10 +1190,11 @@ elif menu == "3. Finished Goods & Yield":
             submit_fg = st.form_submit_button(label=btn_fg_label)
 
             if submit_fg:
-                # Calculate weight conversion based on SKU
-                unit_weight = 0.5 if "500g" in sku else (1.0 if "1kg" in sku else (2.0 if "2kg" in sku else (5.0 if "5kg" in sku else (10.0 if "10kg" in sku else (30.0 if "30kg" in sku else (50.0 if "50kg" in sku else 1.0))))))
-                sku_total_wt = qty_in_pouches * unit_weight
-                total_finished_qty = sku_total_wt + bran_qty + chokar_qty
+                # Combine primary selected SKUs into a summary string or process them
+                primary_sku = sku_rows_data[0]["sku"] if len(sku_rows_data) > 0 else "Multiple"
+                total_sku_pouches = sum([item["qty"] for item in sku_rows_data])
+                total_sku_weight = sum([item["total_kg"] for item in sku_rows_data])
+                total_finished_qty = total_sku_weight + bran_qty + chokar_qty
 
                 conn = get_connection()
                 cursor = conn.cursor()
@@ -1177,7 +1205,7 @@ elif menu == "3. Finished Goods & Yield":
                         UPDATE finished_goods 
                         SET production_date=?, miller_name=?, sku=?, mrp=?, qty_in_pouches=?, batch_code=?, mfd_date=?, use_by_date=?, bran_qty=?, chokar_qty=?, total_finished_qty=?, remarks=?
                         WHERE id=?
-                    """, (production_date, miller_name, sku, mrp, qty_in_pouches, batch_code, mfd_date, use_by_date, bran_qty, chokar_qty, total_finished_qty, remarks, fg_id))
+                    """, (production_date, miller_name, primary_sku, mrp, total_sku_pouches, batch_code, mfd_date, use_by_date, bran_qty, chokar_qty, total_finished_qty, remarks, fg_id))
                     conn.commit()
                     conn.close()
                     st.success(f"Finished Goods ID {fg_id} Updated Successfully!")
@@ -1187,7 +1215,7 @@ elif menu == "3. Finished Goods & Yield":
                     cursor.execute("""
                         INSERT INTO finished_goods (production_date, miller_name, sku, mrp, qty_in_pouches, batch_code, mfd_date, use_by_date, bran_qty, chokar_qty, total_finished_qty, remarks, entered_by)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (production_date, miller_name, sku, mrp, qty_in_pouches, batch_code, mfd_date, use_by_date, bran_qty, chokar_qty, total_finished_qty, remarks, current_logged_user))
+                    """, (production_date, miller_name, primary_sku, mrp, total_sku_pouches, batch_code, mfd_date, use_by_date, bran_qty, chokar_qty, total_finished_qty, remarks, current_logged_user))
                     conn.commit()
                     conn.close()
 
@@ -1198,10 +1226,9 @@ BETTER NUTRITION - FINISHED GOODS REPORT
 • Production Date: {production_date}
 • Entered By: {current_logged_user}
 • Miller Name: {miller_name}
-• SKU / Pack Size: {sku} | MRP: ₹{mrp}
-• Pouches / Bags Count: {qty_in_pouches}
 • Batch Code: {batch_code}
 • MFD: {mfd_date} | Use By: {use_by_date}
+• Total SKU Pouches/Bags: {total_sku_pouches}
 • Wheat Bran: {bran_qty:,.2f} kg | Chokar: {chokar_qty:,.2f} kg
 • Total Finished Goods Weight: {total_finished_qty:,.2f} kg
 =========================================
