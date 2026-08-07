@@ -85,10 +85,10 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT, entry_date TEXT, miller_name TEXT, bag_size TEXT, received_bags INTEGER, issued_bags INTEGER, balance_bags INTEGER, remarks TEXT, entered_by TEXT
         )
     """)
-    # Updated Dispatch table with SKU breakdown columns
+    # Updated Dispatch table with updated SKU breakdown columns (500g, 1kg, 2kg, 5kg)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS dispatch (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, dispatch_date TEXT, miller_name TEXT, party_name TEXT, vehicle_number TEXT, bags_500g INTEGER, bags_1kg INTEGER, bags_2kg INTEGER, pouches_5kg INTEGER, other_qty REAL, total_dispatched_wt REAL, remarks TEXT, entered_by TEXT
+            id INTEGER PRIMARY KEY AUTOINCREMENT, dispatch_date TEXT, miller_name TEXT, party_name TEXT, vehicle_number TEXT, pouches_500g INTEGER, bags_1kg INTEGER, bags_2kg INTEGER, pouches_5kg INTEGER, other_qty REAL, total_dispatched_wt REAL, remarks TEXT, entered_by TEXT
         )
     """)
 
@@ -101,8 +101,9 @@ def init_db():
         "ALTER TABLE finished_goods ADD COLUMN entered_by TEXT",
         "ALTER TABLE packing_material ADD COLUMN entered_by TEXT",
         "ALTER TABLE dispatch ADD COLUMN entered_by TEXT",
-        "ALTER TABLE dispatch ADD COLUMN bags_30kg INTEGER",
-        "ALTER TABLE dispatch ADD COLUMN bags_10kg INTEGER",
+        "ALTER TABLE dispatch ADD COLUMN pouches_500g INTEGER",
+        "ALTER TABLE dispatch ADD COLUMN bags_1kg INTEGER",
+        "ALTER TABLE dispatch ADD COLUMN bags_2kg INTEGER",
         "ALTER TABLE dispatch ADD COLUMN pouches_5kg INTEGER",
         "ALTER TABLE dispatch ADD COLUMN other_qty REAL",
     ]:
@@ -1609,7 +1610,7 @@ elif menu == "4. Better Nutrition Packing Material":
                 entry_date_obj = st.date_input("Entry Date", value=default_edate)
                 entry_date = entry_date_obj.strftime("%d %b %Y")
 
-                bag_sizes = ["30 kg Bag", "10 kg Bag", "5 kg Pouch", "Other"]
+                bag_sizes = ["500g Pouch", "1kg Bag", "2kg Bag", "5kg Pouch", "Other"]
                 default_bs_idx = 0
                 if (
                     edit_pm_data is not None
@@ -1617,7 +1618,7 @@ elif menu == "4. Better Nutrition Packing Material":
                 ):
                     default_bs_idx = bag_sizes.index(edit_pm_data["bag_size"])
                 bag_size = st.selectbox(
-                    "Bag Size", bag_sizes, index=default_bs_idx
+                    "Bag / Pouch Size", bag_sizes, index=default_bs_idx
                 )
 
                 default_rec_bags = (
@@ -1626,7 +1627,7 @@ elif menu == "4. Better Nutrition Packing Material":
                     else 0
                 )
                 received_bags = st.number_input(
-                    "Received Bags",
+                    "Received Quantities",
                     min_value=0,
                     value=default_rec_bags,
                     step=10,
@@ -1638,7 +1639,7 @@ elif menu == "4. Better Nutrition Packing Material":
                     else 0
                 )
                 issued_bags = st.number_input(
-                    "Issued Bags",
+                    "Issued Quantities",
                     min_value=0,
                     value=default_iss_bags,
                     step=10,
@@ -1717,9 +1718,9 @@ Neeche nayi Packing Material entry ki poori report di gayi hai:
 • Entered By (User): {current_logged_user}
 • Miller Name: {miller_name}
 • Bag Size: {bag_size}
-• Received Bags: {received_bags}
-• Issued Bags: {issued_bags}
-• Balance Bags: {balance_bags}
+• Received Quantity: {received_bags}
+• Issued Quantity: {issued_bags}
+• Balance Quantity: {balance_bags}
 • Remarks: {remarks}
 
 ===============================================
@@ -1727,7 +1728,7 @@ Yeh email Better Nutrition ERP System se automatically bheji gayi hai.
 """
                     send_email_alert(email_subject, email_body)
                     st.success(
-                        f"Packing Material Saved Successfully by {current_logged_user}! Balance Bags:"
+                        f"Packing Material Saved Successfully by {current_logged_user}! Balance Stock:"
                         f" {balance_bags}. Email report sent to Admin."
                     )
                     st.rerun()
@@ -1742,7 +1743,7 @@ elif menu == "5. Daily Dispatch Entry":
         """
         <div class="hero-banner">
             <h1>Daily Dispatch Entry</h1>
-            <p>Record finished goods dispatches, party names, vehicle numbers, and SKU bag breakdowns.</p>
+            <p>Record finished goods dispatches, party names, vehicle numbers, and SKU breakdown (500g, 1kg, 2kg, 5kg).</p>
         </div>
     """,
         unsafe_allow_html=True,
@@ -1856,30 +1857,42 @@ elif menu == "5. Daily Dispatch Entry":
                     placeholder="e.g. UP-75-BT-1234",
                 )
             with c2:
-                default_b30 = (
-                    int(edit_disp_data["bags_30kg"])
-                    if edit_disp_data is not None and "bags_30kg" in edit_disp_data and pd.notnull(edit_disp_data["bags_30kg"])
+                default_p500 = (
+                    int(edit_disp_data["pouches_500g"])
+                    if edit_disp_data is not None and "pouches_500g" in edit_disp_data and pd.notnull(edit_disp_data["pouches_500g"])
                     else 0
                 )
-                bags_30kg = st.number_input(
-                    "30 kg Bags Count",
+                pouches_500g = st.number_input(
+                    "500g Pouches Count",
                     min_value=0,
-                    value=default_b30,
+                    value=default_p500,
                     step=1,
                 )
 
-                default_b10 = (
-                    int(edit_disp_data["bags_10kg"])
-                    if edit_disp_data is not None and "bags_10kg" in edit_disp_data and pd.notnull(edit_disp_data["bags_10kg"])
+                default_b1k = (
+                    int(edit_disp_data["bags_1kg"])
+                    if edit_disp_data is not None and "bags_1kg" in edit_disp_data and pd.notnull(edit_disp_data["bags_1kg"])
                     else 0
                 )
-                bags_10kg = st.number_input(
-                    "10 kg Bags Count",
+                bags_1kg = st.number_input(
+                    "1 kg Bags Count",
                     min_value=0,
-                    value=default_b10,
+                    value=default_b1k,
                     step=1,
                 )
             with c3:
+                default_b2k = (
+                    int(edit_disp_data["bags_2kg"])
+                    if edit_disp_data is not None and "bags_2kg" in edit_disp_data and pd.notnull(edit_disp_data["bags_2kg"])
+                    else 0
+                )
+                bags_2kg = st.number_input(
+                    "2 kg Bags Count",
+                    min_value=0,
+                    value=default_b2k,
+                    step=1,
+                )
+
                 default_p5 = (
                     int(edit_disp_data["pouches_5kg"])
                     if edit_disp_data is not None and "pouches_5kg" in edit_disp_data and pd.notnull(edit_disp_data["pouches_5kg"])
@@ -1892,6 +1905,8 @@ elif menu == "5. Daily Dispatch Entry":
                     step=1,
                 )
 
+            c4_1, c4_2 = st.columns(2)
+            with c4_1:
                 default_other = (
                     float(edit_disp_data["other_qty"])
                     if edit_disp_data is not None and "other_qty" in edit_disp_data and pd.notnull(edit_disp_data["other_qty"])
@@ -1904,9 +1919,9 @@ elif menu == "5. Daily Dispatch Entry":
                     step=10.0,
                     format="%.2f",
                 )
-
-            default_drem = edit_disp_data["remarks"] if edit_disp_data is not None else ""
-            remarks = st.text_input("Remarks", value=default_drem)
+            with c4_2:
+                default_drem = edit_disp_data["remarks"] if edit_disp_data is not None else ""
+                remarks = st.text_input("Remarks", value=default_drem)
 
             btn_disp_label = (
                 "Update Dispatch Record"
@@ -1916,9 +1931,11 @@ elif menu == "5. Daily Dispatch Entry":
             submit_dispatch = st.form_submit_button(label=btn_disp_label)
 
             if submit_dispatch:
+                # Weight calculation based on 500g (0.5kg), 1kg, 2kg, 5kg
                 total_dispatched_wt = (
-                    (bags_30kg * 30.0)
-                    + (bags_10kg * 10.0)
+                    (pouches_500g * 0.5)
+                    + (bags_1kg * 1.0)
+                    + (bags_2kg * 2.0)
                     + (pouches_5kg * 5.0)
                     + other_qty
                 )
@@ -1929,7 +1946,7 @@ elif menu == "5. Daily Dispatch Entry":
                     cursor.execute(
                         """
                         UPDATE dispatch 
-                        SET dispatch_date=?, miller_name=?, party_name=?, vehicle_number=?, bags_30kg=?, bags_10kg=?, pouches_5kg=?, other_qty=?, total_dispatched_wt=?, remarks=?
+                        SET dispatch_date=?, miller_name=?, party_name=?, vehicle_number=?, pouches_500g=?, bags_1kg=?, bags_2kg=?, pouches_5kg=?, other_qty=?, total_dispatched_wt=?, remarks=?
                         WHERE id=?
                     """,
                         (
@@ -1937,8 +1954,9 @@ elif menu == "5. Daily Dispatch Entry":
                             miller_name,
                             party_name,
                             vehicle_number,
-                            bags_30kg,
-                            bags_10kg,
+                            pouches_500g,
+                            bags_1kg,
+                            bags_2kg,
                             pouches_5kg,
                             other_qty,
                             round(total_dispatched_wt, 2),
@@ -1957,16 +1975,17 @@ elif menu == "5. Daily Dispatch Entry":
                 else:
                     cursor.execute(
                         """
-                        INSERT INTO dispatch (dispatch_date, miller_name, party_name, vehicle_number, bags_30kg, bags_10kg, pouches_5kg, other_qty, total_dispatched_wt, remarks, entered_by)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO dispatch (dispatch_date, miller_name, party_name, vehicle_number, pouches_500g, bags_1kg, bags_2kg, pouches_5kg, other_qty, total_dispatched_wt, remarks, entered_by)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                         (
                             dispatch_date,
                             miller_name,
                             party_name,
                             vehicle_number,
-                            bags_30kg,
-                            bags_10kg,
+                            pouches_500g,
+                            bags_1kg,
+                            bags_2kg,
                             pouches_5kg,
                             other_qty,
                             round(total_dispatched_wt, 2),
@@ -1990,8 +2009,9 @@ Neeche nayi Dispatch entry ki poori report di gayi hai:
 • Vehicle Number: {vehicle_number}
 
 SKU BREAKDOWN & TOTAL WEIGHT:
-• 30 kg Bags: {bags_30kg}
-• 10 kg Bags: {bags_10kg}
+• 500g Pouches: {pouches_500g}
+• 1 kg Bags: {bags_1kg}
+• 2 kg Bags: {bags_2kg}
 • 5 kg Pouches: {pouches_5kg}
 • Other Qty (kg): {other_qty:,.2f} kg
 • Total Dispatched Weight: {round(total_dispatched_wt, 2):,.2f} kg
