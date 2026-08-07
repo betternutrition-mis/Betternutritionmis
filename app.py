@@ -5,15 +5,12 @@ import datetime
 
 st.set_page_config(page_title="Better Nutrition MIS", layout="wide")
 
-# Database Connection Helper
 def get_connection():
     return sqlite3.connect("flour_mill_erp.db", check_same_thread=False)
 
-# Initialize Database and Fix Missing Columns Automatically
 def init_db():
     conn = get_connection()
     cursor = conn.cursor()
-    # Create tables if not exists
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS dispatch (
             id INTEGER PRIMARY KEY AUTOINCREMENT, 
@@ -30,7 +27,6 @@ def init_db():
             entered_by TEXT
         )
     """)
-    # Ensure all required columns exist (Fixes SQLite OperationalError)
     for col in [
         "party_name TEXT", 
         "vehicle_number TEXT", 
@@ -51,7 +47,6 @@ def init_db():
 
 init_db()
 
-# Sidebar Navigation
 st.sidebar.title("Navigation Menu")
 menu_option = st.sidebar.selectbox(
     "Select Option", 
@@ -134,19 +129,46 @@ if menu_option == "5. Daily Dispatch Entry":
         st.info("No dispatch records found yet.")
     conn.close()
 
+# Baaki sabhi options ke liye aapka Dashboard / Master Records View wapas laa diya hai
 else:
-    st.title("Better Nutrition - Dashboard & Records")
-    st.write(f"Currently viewing: **{menu_option}**")
+    st.title("📊 Better Nutrition - Dashboard & Master Records")
+    st.write(f"Displaying: **{menu_option}**")
     
-    # Baaki options ke liye generic view ya aapka purana code yaha adjust ho jayega
     conn = get_connection()
     try:
         if "Raw Material" in menu_option:
             df = pd.read_sql("SELECT * FROM raw_material", conn)
+        elif "Milling" in menu_option:
+            df = pd.read_sql("SELECT * FROM milling_quality", conn)
+        elif "Finished Goods" in menu_option:
+            df = pd.read_sql("SELECT * FROM finished_goods", conn)
+        elif "Packing Material" in menu_option:
+            df = pd.read_sql("SELECT * FROM packing_material", conn)
+        else:
+            # Master Records & Export default view (Sabhi tables ke tabs ya data)
+            st.subheader("All System Master Records & Export Data")
+            tab1, tab2, tab3, tab4, tab5 = st.tabs(["Raw Material", "Milling & Quality", "Finished Goods", "Packing Material", "Dispatch"])
+            
+            with tab1:
+                st.dataframe(pd.read_sql("SELECT * FROM raw_material", conn), use_container_width=True)
+            with tab2:
+                try: st.dataframe(pd.read_sql("SELECT * FROM milling_quality", conn), use_container_width=True)
+                except: st.info("No data")
+            with tab3:
+                try: st.dataframe(pd.read_sql("SELECT * FROM finished_goods", conn), use_container_width=True)
+                except: st.info("No data")
+            with tab4:
+                try: st.dataframe(pd.read_sql("SELECT * FROM packing_material", conn), use_container_width=True)
+                except: st.info("No data")
+            with tab5:
+                try: st.dataframe(pd.read_sql("SELECT * FROM dispatch", conn), use_container_width=True)
+                except: st.info("No data")
+            df = None
+
+        if df is not None and not df.empty and menu_option != "6. Master Records & Export (Admin)":
             st.dataframe(df, use_container_width=True)
-        elif "Dispatch" in menu_option:
-            df = pd.read_sql("SELECT * FROM dispatch", conn)
-            st.dataframe(df, use_container_width=True)
-    except Exception:
-        st.info("Aapke is section ka data yahan show hoga.")
+            
+    except Exception as e:
+        st.info("Data table is being populated or initialized.")
+    
     conn.close()
