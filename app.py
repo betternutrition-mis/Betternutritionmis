@@ -75,9 +75,10 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT, milling_id INTEGER, test_date TEXT, miller_name TEXT, moisture_milled REAL, granulation TEXT, ccl4 TEXT, ash_aia REAL, alcoholic_acidity REAL, wap REAL, gluten TEXT, chapati_sensory TEXT
         )
     """)
+    # Updated Finished Goods table to support multiple SKU entries per date/batch
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS finished_goods (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, production_date TEXT, miller_name TEXT, flour_qty REAL, bran_qty REAL, chokar_qty REAL, total_finished_qty REAL, remarks TEXT, entered_by TEXT
+            id INTEGER PRIMARY KEY AUTOINCREMENT, production_date TEXT, miller_name TEXT, sku TEXT, mrp REAL, qty_in_pouches INTEGER, batch_code TEXT, mfd_date TEXT, use_by_date TEXT, bran_qty REAL, chokar_qty REAL, total_finished_qty REAL, remarks TEXT, entered_by TEXT
         )
     """)
     cursor.execute("""
@@ -85,7 +86,6 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT, entry_date TEXT, miller_name TEXT, bag_size TEXT, received_bags INTEGER, issued_bags INTEGER, balance_bags INTEGER, remarks TEXT, entered_by TEXT
         )
     """)
-    # Updated Dispatch table with corrected SKU labels (pouches/bags updated to pouch for 500g & 5kg, bag for 1kg & 2kg)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS dispatch (
             id INTEGER PRIMARY KEY AUTOINCREMENT, dispatch_date TEXT, miller_name TEXT, party_name TEXT, vehicle_number TEXT, pouches_500g INTEGER, bags_1kg INTEGER, bags_2kg INTEGER, pouches_5kg INTEGER, other_qty REAL, total_dispatched_wt REAL, remarks TEXT, entered_by TEXT
@@ -99,6 +99,12 @@ def init_db():
         "ALTER TABLE milling ADD COLUMN entered_by TEXT",
         "ALTER TABLE milling ADD COLUMN finished_qty REAL",
         "ALTER TABLE finished_goods ADD COLUMN entered_by TEXT",
+        "ALTER TABLE finished_goods ADD COLUMN sku TEXT",
+        "ALTER TABLE finished_goods ADD COLUMN mrp REAL",
+        "ALTER TABLE finished_goods ADD COLUMN qty_in_pouches INTEGER",
+        "ALTER TABLE finished_goods ADD COLUMN batch_code TEXT",
+        "ALTER TABLE finished_goods ADD COLUMN mfd_date TEXT",
+        "ALTER TABLE finished_goods ADD COLUMN use_by_date TEXT",
         "ALTER TABLE packing_material ADD COLUMN entered_by TEXT",
         "ALTER TABLE dispatch ADD COLUMN entered_by TEXT",
         "ALTER TABLE dispatch ADD COLUMN pouches_500g INTEGER",
@@ -1273,7 +1279,7 @@ elif menu == "3. Finished Goods & Yield":
         """
         <div class="hero-banner">
             <h1>Finished Goods Production & Yield Tracking</h1>
-            <p>Log flour, bran, and chokar production quantities and monitor manufacturing yield percentages.</p>
+            <p>Log multiple SKUs (500g, 1kg, 2kg, 5kg), MRP, pouch quantities, batch codes, MFD, Use By, bran, and chokar on a single date.</p>
         </div>
     """,
         unsafe_allow_html=True,
@@ -1306,6 +1312,8 @@ elif menu == "3. Finished Goods & Yield":
             + df_fg_saved["production_date"]
             + " | Miller: "
             + df_fg_saved["miller_name"]
+            + " | SKU: "
+            + df_fg_saved["sku"].fillna("-")
             + " | Total FG: "
             + df_fg_saved["total_finished_qty"].astype(str)
             + " kg"
@@ -1373,22 +1381,69 @@ elif menu == "3. Finished Goods & Yield":
                 prod_date_obj = st.date_input("Production Date", value=default_pdate)
                 production_date = prod_date_obj.strftime("%d %b %Y")
 
-                default_flour = (
-                    float(edit_fg_data["flour_qty"])
-                    if edit_fg_data is not None
+                sku_options = ["500g", "1kg", "2kg", "5kg"]
+                default_sku_idx = 0
+                if edit_fg_data is not None and "sku" in edit_fg_data and edit_fg_data["sku"] in sku_options:
+                    default_sku_idx = sku_options.index(edit_fg_data["sku"])
+                sku = st.selectbox("SKU Size", sku_options, index=default_sku_idx)
+
+                default_mrp = (
+                    float(edit_fg_data["mrp"])
+                    if edit_fg_data is not None and "mrp" in edit_fg_data and pd.notnull(edit_fg_data["mrp"])
                     else 0.0
                 )
-                flour_qty = st.number_input(
-                    "Flour Quantity (kg)",
+                mrp = st.number_input(
+                    "MRP (₹)",
                     min_value=0.0,
-                    value=default_flour,
-                    step=10.0,
+                    value=default_mrp,
+                    step=1.0,
                     format="%.2f",
                 )
 
+                default_qip = (
+                    int(edit_fg_data["qty_in_pouches"])
+                    if edit_fg_data is not None and "qty_in_pouches" in edit_fg_data and pd.notnull(edit_fg_data["qty_in_pouches"])
+                    else 0
+                )
+                qty_in_pouches = st.number_input(
+                    "Qty in Pouch / Bag (Count)",
+                    min_value=0,
+                    value=default_qip,
+                    step=1,
+                )
+
+                default_batch = (
+                    edit_fg_data["batch_code"]
+                    if edit_fg_data is not None and "batch_code" in edit_fg_data and pd.notnull(edit_fg_data["batch_code"])
+                    else ""
+                )
+                batch_code = st.text_input("Batch Code", value=default_batch)
+            with c2:
+                default_mfd = datetime.date.today()
+                if edit_fg_data is not None and "mfd_date" in edit_fg_data and pd.notnull(edit_fg_data["mfd_date"]):
+                    try:
+                        default_mfd = datetime.datetime.strptime(
+                            edit_fg_data["mfd_date"], "%d %b %Y"
+                        ).date()
+                    except Exception:
+                        pass
+                mfd_obj = st.date_input("MFD Date", value=default_mfd)
+                mfd_date = mfd_obj.strftime("%d %b %Y")
+
+                default_useby = datetime.date.today()
+                if edit_fg_data is not None and "use_by_date" in edit_fg_data and pd.notnull(edit_fg_data["use_by_date"]):
+                    try:
+                        default_useby = datetime.datetime.strptime(
+                            edit_fg_data["use_by_date"], "%d %b %Y"
+                        ).date()
+                    except Exception:
+                        pass
+                useby_obj = st.date_input("Use By Date", value=default_useby)
+                use_by_date = useby_obj.strftime("%d %b %Y")
+
                 default_bran = (
                     float(edit_fg_data["bran_qty"])
-                    if edit_fg_data is not None
+                    if edit_fg_data is not None and "bran_qty" in edit_fg_data and pd.notnull(edit_fg_data["bran_qty"])
                     else 0.0
                 )
                 bran_qty = st.number_input(
@@ -1398,10 +1453,10 @@ elif menu == "3. Finished Goods & Yield":
                     step=10.0,
                     format="%.2f",
                 )
-            with c2:
+
                 default_chokar = (
                     float(edit_fg_data["chokar_qty"])
-                    if edit_fg_data is not None
+                    if edit_fg_data is not None and "chokar_qty" in edit_fg_data and pd.notnull(edit_fg_data["chokar_qty"])
                     else 0.0
                 )
                 chokar_qty = st.number_input(
@@ -1413,7 +1468,7 @@ elif menu == "3. Finished Goods & Yield":
                 )
 
                 default_fg_rem = (
-                    edit_fg_data["remarks"] if edit_fg_data is not None else ""
+                    edit_fg_data["remarks"] if edit_fg_data is not None and "remarks" in edit_fg_data and pd.notnull(edit_fg_data["remarks"]) else ""
                 )
                 remarks = st.text_input("Remarks", value=default_fg_rem)
 
@@ -1425,7 +1480,11 @@ elif menu == "3. Finished Goods & Yield":
             submit_fg = st.form_submit_button(label=btn_fg_label)
 
             if submit_fg:
-                total_finished_qty = flour_qty + bran_qty + chokar_qty
+                # Compute flour weight based on SKU multiplier
+                multiplier = 0.5 if sku == "500g" else (1.0 if sku == "1kg" else (2.0 if sku == "2kg" else 5.0))
+                flour_calculated_wt = qty_in_pouches * multiplier
+                total_finished_qty = flour_calculated_wt + bran_qty + chokar_qty
+
                 conn = get_connection()
                 cursor = conn.cursor()
 
@@ -1433,13 +1492,18 @@ elif menu == "3. Finished Goods & Yield":
                     cursor.execute(
                         """
                         UPDATE finished_goods 
-                        SET production_date=?, miller_name=?, flour_qty=?, bran_qty=?, chokar_qty=?, total_finished_qty=?, remarks=?
+                        SET production_date=?, miller_name=?, sku=?, mrp=?, qty_in_pouches=?, batch_code=?, mfd_date=?, use_by_date=?, bran_qty=?, chokar_qty=?, total_finished_qty=?, remarks=?
                         WHERE id=?
                     """,
                         (
                             production_date,
                             miller_name,
-                            flour_qty,
+                            sku,
+                            mrp,
+                            qty_in_pouches,
+                            batch_code,
+                            mfd_date,
+                            use_by_date,
                             bran_qty,
                             chokar_qty,
                             round(total_finished_qty, 2),
@@ -1458,13 +1522,18 @@ elif menu == "3. Finished Goods & Yield":
                 else:
                     cursor.execute(
                         """
-                        INSERT INTO finished_goods (production_date, miller_name, flour_qty, bran_qty, chokar_qty, total_finished_qty, remarks, entered_by)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO finished_goods (production_date, miller_name, sku, mrp, qty_in_pouches, batch_code, mfd_date, use_by_date, bran_qty, chokar_qty, total_finished_qty, remarks, entered_by)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                         (
                             production_date,
                             miller_name,
-                            flour_qty,
+                            sku,
+                            mrp,
+                            qty_in_pouches,
+                            batch_code,
+                            mfd_date,
+                            use_by_date,
                             bran_qty,
                             chokar_qty,
                             round(total_finished_qty, 2),
@@ -1475,7 +1544,7 @@ elif menu == "3. Finished Goods & Yield":
                     conn.commit()
                     conn.close()
 
-                    email_subject = f"[REPORT] New Finished Goods Entry - {miller_name}"
+                    email_subject = f"[REPORT] New Finished Goods Entry - {miller_name} ({sku})"
                     email_body = f"""
 BETTER NUTRITION - FINISHED GOODS ENTRY REPORT
 =============================================
@@ -1484,7 +1553,12 @@ Neeche nayi Finished Goods entry ki poori report di gayi hai:
 • Production Date: {production_date}
 • Entered By (User): {current_logged_user}
 • Miller Name: {miller_name}
-• Flour Quantity: {flour_qty:,.2f} kg
+• SKU: {sku}
+• MRP: ₹{mrp:,.2f}
+• Qty in Pouches/Bags: {qty_in_pouches}
+• Batch Code: {batch_code}
+• MFD Date: {mfd_date}
+• Use By Date: {use_by_date}
 • Bran Quantity: {bran_qty:,.2f} kg
 • Chokar Quantity: {chokar_qty:,.2f} kg
 • Total Finished Quantity: {round(total_finished_qty, 2):,.2f} kg
@@ -1610,7 +1684,6 @@ elif menu == "4. Better Nutrition Packing Material":
                 entry_date_obj = st.date_input("Entry Date", value=default_edate)
                 entry_date = entry_date_obj.strftime("%d %b %Y")
 
-                # Corrected Packing Material SKU labels (500g pouch, 1kg bag, 2kg bag, 5kg pouch)
                 bag_sizes = ["500g Pouch", "1kg Bag", "2kg Bag", "5kg Pouch", "Other"]
                 default_bs_idx = 0
                 if (
@@ -1887,7 +1960,6 @@ elif menu == "5. Daily Dispatch Entry":
                     if edit_disp_data is not None and "bags_2kg" in edit_disp_data and pd.notnull(edit_disp_data["bags_2kg"])
                     else 0
                 )
-                # Corrected label for 2kg (now correctly labeled as 2 kg Bags)
                 bags_2kg = st.number_input(
                     "2 kg Bags Count",
                     min_value=0,
@@ -1900,7 +1972,6 @@ elif menu == "5. Daily Dispatch Entry":
                     if edit_disp_data is not None and "pouches_5kg" in edit_disp_data and pd.notnull(edit_disp_data["pouches_5kg"])
                     else 0
                 )
-                # Corrected label for 5kg (now correctly labeled as 5 kg Pouches)
                 pouches_5kg = st.number_input(
                     "5 kg Pouches Count",
                     min_value=0,
@@ -1934,7 +2005,6 @@ elif menu == "5. Daily Dispatch Entry":
             submit_dispatch = st.form_submit_button(label=btn_disp_label)
 
             if submit_dispatch:
-                # Weight calculation based on 500g pouch, 1kg bag, 2kg bag, 5kg pouch
                 total_dispatched_wt = (
                     (pouches_500g * 0.5)
                     + (bags_1kg * 1.0)
