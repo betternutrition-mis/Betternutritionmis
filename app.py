@@ -75,6 +75,22 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT, milling_id INTEGER, test_date TEXT, miller_name TEXT, moisture_milled REAL, granulation TEXT, ccl4 TEXT, ash_aia REAL, alcoholic_acidity REAL, wap REAL, gluten TEXT, chapati_sensory TEXT
         )
     """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS finished_goods (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, production_date TEXT, miller_name TEXT, flour_qty REAL, bran_qty REAL, chokar_qty REAL, total_finished_qty REAL, remarks TEXT, entered_by TEXT
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS packing_material (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, entry_date TEXT, miller_name TEXT, bag_size TEXT, received_bags INTEGER, issued_bags INTEGER, balance_bags INTEGER, remarks TEXT, entered_by TEXT
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS dispatch (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, dispatch_date TEXT, miller_name TEXT, party_name TEXT, vehicle_number TEXT, item_name TEXT, bags_dispatched INTEGER, total_dispatched_wt REAL, remarks TEXT, entered_by TEXT
+        )
+    """)
+
     try:
         cursor.execute("ALTER TABLE quality ADD COLUMN wap REAL")
     except Exception:
@@ -97,7 +113,6 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT, employee_name TEXT, pin TEXT, role TEXT
         )
     """)
-    # Default employees & Admin add karein
     cursor.execute("SELECT COUNT(*) FROM employees")
     if cursor.fetchone()[0] == 0:
         cursor.execute(
@@ -120,14 +135,11 @@ def init_db():
 init_db()
 
 
-# Email Alert Function (Jo Team ya Admin sabhi entries par email bhejega)
 def send_email_alert(subject, body):
     try:
         sender_email = "kamtanath111@gmail.com"
-        sender_password = "kmbdgdznfcrdrrdh"  # Generated App Password
-        receiver_email = (
-            "kamtanath111@gmail.com"  # Aapka email jahan saari reports aayengi
-        )
+        sender_password = "kmbdgdznfcrdrrdh"
+        receiver_email = "kamtanath111@gmail.com"
 
         msg = EmailMessage()
         msg.set_content(body)
@@ -143,7 +155,6 @@ def send_email_alert(subject, body):
         print(f"Email error: {e}")
 
 
-# Authentication System supporting Employee ID + PIN and Admin Username + Password
 def check_auth():
     if "logged_in" not in st.session_state:
         st.session_state["logged_in"] = False
@@ -169,7 +180,6 @@ def check_auth():
                 submit_login = st.form_submit_button("Login Karein")
 
                 if submit_login:
-                    # Special Hardcoded Admin Check
                     if (
                         emp_name_input.strip() == "Admin"
                         and emp_pin.strip() == "adMin@123"
@@ -209,7 +219,6 @@ def check_auth():
 if not check_auth():
     st.stop()
 
-# Top Header Branding Bar
 st.markdown(
     """
     <div class="header-container">
@@ -682,7 +691,6 @@ elif menu == "1. Raw Material Received":
                     conn.commit()
                     conn.close()
 
-                    # Detailed Email Report for Raw Material
                     email_subject = f"[REPORT] New Raw Material Entry - {miller_name}"
                     email_body = f"""
 BETTER NUTRITION - RAW MATERIAL ENTRY REPORT
@@ -710,7 +718,6 @@ QUALITY & WEIGHT PARAMETERS:
 Yeh email Better Nutrition ERP System se automatically bheji gayi hai.
 """
                     send_email_alert(email_subject, email_body)
-
                     st.success(
                         f"RM Saved & Stored by {current_logged_user}! Net Weight:"
                         f" {net_wt:,.2f} kg. Email report sent to Admin."
@@ -1128,7 +1135,6 @@ elif menu == "2. Milling & Quality Lab Entry":
                     conn.commit()
                     conn.close()
 
-                    # Detailed Email Report for Milling, Finished Goods & Quality
                     email_subject = f"[REPORT] Milling & Finished Goods Entry - {miller_name}"
                     email_body = f"""
 BETTER NUTRITION - MILLING, FINISHED GOODS & QUALITY LAB REPORT
@@ -1159,7 +1165,6 @@ QUALITY LAB TEST PARAMETERS (Test Date: {q_date}):
 Yeh email Better Nutrition ERP System se automatically bheji gayi hai.
 """
                     send_email_alert(email_subject, email_body)
-
                     st.success(
                         f"Milling, Finished Goods & Quality Data Successfully"
                         f" Saved by {current_logged_user}! Email report sent to"
@@ -1318,24 +1323,396 @@ Yeh email Better Nutrition ERP System se automatically bheji gayi hai.
             st.dataframe(df_m_saved, use_container_width=True)
 
 elif menu == "3. Finished Goods & Yield":
-    st.subheader("Finished Goods & Yield Calculation")
-    st.info("Finished Goods module active hai.")
+    st.markdown(
+        """
+        <div class="hero-banner">
+            <h1>Finished Goods Production & Yield Tracking</h1>
+            <p>Log production quantities of Flour, Bran, and Chokar with automatic yield calculation.</p>
+        </div>
+    """,
+        unsafe_allow_html=True,
+    )
+
+    miller_name = get_miller_input("fg_section")
+
+    with st.form("finished_goods_form"):
+        c1, c2 = st.columns(2)
+        with c1:
+            prod_date_obj = st.date_input(
+                "Production Date", datetime.date.today()
+            )
+            production_date = prod_date_obj.strftime("%d %b %Y")
+
+            flour_qty = st.number_input(
+                "Flour Production Qty (kg)", min_value=0.0, step=10.0
+            )
+            bran_qty = st.number_input(
+                "Bran Production Qty (kg)", min_value=0.0, step=10.0
+            )
+        with c2:
+            chokar_qty = st.number_input(
+                "Chokar Production Qty (kg)", min_value=0.0, step=10.0
+            )
+            remarks = st.text_input("Production Remarks")
+
+        total_finished = flour_qty + bran_qty + chokar_qty
+        st.info(f"**Total Finished Goods Calculated:** {total_finished:,.2f} kg")
+
+        submit_fg = st.form_submit_button("Save Finished Goods Entry")
+
+        if submit_fg:
+            conn = get_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO finished_goods (production_date, miller_name, flour_qty, bran_qty, chokar_qty, total_finished_qty, remarks, entered_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+                (
+                    production_date,
+                    miller_name,
+                    flour_qty,
+                    bran_qty,
+                    chokar_qty,
+                    total_finished,
+                    remarks,
+                    current_logged_user,
+                ),
+            )
+            conn.commit()
+            conn.close()
+
+            email_subject = f"[REPORT] Finished Goods Entry - {miller_name}"
+            email_body = f"""
+BETTER NUTRITION - FINISHED GOODS PRODUCTION REPORT
+==================================================
+Neeche nayi Finished Goods entry ki poori report di gayi hai:
+
+• Production Date: {production_date}
+• Entered By (User): {current_logged_user}
+• Miller Name: {miller_name}
+
+PRODUCTION BREAKDOWN:
+• Flour Qty: {flour_qty:,.2f} kg
+• Bran Qty: {bran_qty:,.2f} kg
+• Chokar Qty: {chokar_qty:,.2f} kg
+• Total Finished Goods Qty: {total_finished:,.2f} kg
+• Remarks: {remarks}
+
+==================================================
+Yeh email Better Nutrition ERP System se automatically bheji gayi hai.
+"""
+            send_email_alert(email_subject, email_body)
+            st.success(
+                f"Finished Goods Successfully Saved by {current_logged_user}!"
+                " Email report sent to Admin."
+            )
+            st.rerun()
+
+    st.subheader("Saved Finished Goods Entries")
+    df_fg_saved = load_data("finished_goods")
+    if not df_fg_saved.empty:
+        st.dataframe(df_fg_saved, use_container_width=True)
 
 elif menu == "4. Better Nutrition Packing Material":
-    st.subheader("Packing Material Management")
-    st.info("Packing Material module active hai.")
+    st.markdown(
+        """
+        <div class="hero-banner">
+            <h1>Better Nutrition Packing Material Management</h1>
+            <p>Track bag sizes, received bags, issued bags, and current stock balance.</p>
+        </div>
+    """,
+        unsafe_allow_html=True,
+    )
+
+    miller_name = get_miller_input("pm_section")
+
+    with st.form("packing_material_form"):
+        c1, c2 = st.columns(2)
+        with c1:
+            entry_date_obj = st.date_input("Entry Date", datetime.date.today())
+            entry_date = entry_date_obj.strftime("%d %b %Y")
+
+            bag_size = st.selectbox(
+                "Bag Size / Type",
+                ["30 kg Bag", "50 kg Bag", "10 kg Bag", "5 kg Bag", "Other"],
+            )
+            received_bags = st.number_input(
+                "Received Bags", min_value=0, step=1
+            )
+        with c2:
+            issued_bags = st.number_input("Issued Bags", min_value=0, step=1)
+            remarks = st.text_input("Packing Material Remarks")
+
+        balance_bags = received_bags - issued_bags
+        st.info(
+            f"**Net Balance Bags Calculated:** {balance_bags:,} bags ({bag_size})"
+        )
+
+        submit_pm = st.form_submit_button("Save Packing Material Entry")
+
+        if submit_pm:
+            conn = get_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO packing_material (entry_date, miller_name, bag_size, received_bags, issued_bags, balance_bags, remarks, entered_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+                (
+                    entry_date,
+                    miller_name,
+                    bag_size,
+                    received_bags,
+                    issued_bags,
+                    balance_bags,
+                    remarks,
+                    current_logged_user,
+                ),
+            )
+            conn.commit()
+            conn.close()
+
+            email_subject = (
+                f"[REPORT] Packing Material Entry - {bag_size} ({miller_name})"
+            )
+            email_body = f"""
+BETTER NUTRITION - PACKING MATERIAL STOCK REPORT
+===============================================
+Neeche nayi Packing Material entry ki poori report di gayi hai:
+
+• Entry Date: {entry_date}
+• Entered By (User): {current_logged_user}
+• Miller Name: {miller_name}
+
+PACKING STOCK DETAILS:
+• Bag Size/Type: {bag_size}
+• Received Bags: {received_bags:,}
+• Issued Bags: {issued_bags:,}
+• Balance Bags: {balance_bags:,}
+• Remarks: {remarks}
+
+===============================================
+Yeh email Better Nutrition ERP System se automatically bheji gayi hai.
+"""
+            send_email_alert(email_subject, email_body)
+            st.success(
+                f"Packing Material Successfully Saved by {current_logged_user}!"
+                " Email report sent to Admin."
+            )
+            st.rerun()
+
+    st.subheader("Saved Packing Material Entries")
+    df_pm_saved = load_data("packing_material")
+    if not df_pm_saved.empty:
+        st.dataframe(df_pm_saved, use_container_width=True)
 
 elif menu == "5. Daily Dispatch Entry":
-    st.subheader("Daily Dispatch Entry")
-    st.info("Dispatch module active hai.")
+    st.markdown(
+        """
+        <div class="hero-banner">
+            <h1>Daily Dispatch Entry & Management</h1>
+            <p>Log outgoing stock dispatches, party names, vehicles, and total dispatched weights.</p>
+        </div>
+    """,
+        unsafe_allow_html=True,
+    )
+
+    miller_name = get_miller_input("disp_section")
+
+    with st.form("dispatch_form"):
+        c1, c2 = st.columns(2)
+        with c1:
+            disp_date_obj = st.date_input(
+                "Dispatch Date", datetime.date.today()
+            )
+            dispatch_date = disp_date_obj.strftime("%d %b %Y")
+
+            party_name = st.text_input("Party Name / Customer Name")
+            vehicle_no = st.text_input("Vehicle Number", placeholder="e.g. UP-75-XYZ-1234")
+        with c2:
+            item_name = st.selectbox(
+                "Item Dispatched", ["Flour", "Bran", "Chokar", "Mixed / Other"]
+            )
+            bags_dispatched = st.number_input(
+                "Bags Dispatched", min_value=0, step=1
+            )
+            total_dispatched_wt = st.number_input(
+                "Total Dispatched Weight (kg)", min_value=0.0, step=10.0
+            )
+
+        remarks = st.text_input("Dispatch Remarks")
+        submit_disp = st.form_submit_button("Save Dispatch Entry")
+
+        if submit_disp:
+            conn = get_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO dispatch (dispatch_date, miller_name, party_name, vehicle_number, item_name, bags_dispatched, total_dispatched_wt, remarks, entered_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+                (
+                    dispatch_date,
+                    miller_name,
+                    party_name,
+                    vehicle_no,
+                    item_name,
+                    bags_dispatched,
+                    total_dispatched_wt,
+                    remarks,
+                    current_logged_user,
+                ),
+            )
+            conn.commit()
+            conn.close()
+
+            email_subject = (
+                f"[REPORT] Daily Dispatch Entry - Party: {party_name}"
+            )
+            email_body = f"""
+BETTER NUTRITION - DAILY STOCK DISPATCH REPORT
+==============================================
+Neeche nayi Dispatch entry ki poori report di gayi hai:
+
+• Dispatch Date: {dispatch_date}
+• Entered By (User): {current_logged_user}
+• Miller Name: {miller_name}
+• Party / Customer Name: {party_name}
+• Vehicle Number: {vehicle_no}
+
+DISPATCH DETAILS:
+• Item Dispatched: {item_name}
+• Bags Dispatched: {bags_dispatched:,}
+• Total Dispatched Weight: {total_dispatched_wt:,.2f} kg
+• Remarks: {remarks}
+
+==============================================
+Yeh email Better Nutrition ERP System se automatically bheji gayi hai.
+"""
+            send_email_alert(email_subject, email_body)
+            st.success(
+                f"Dispatch Entry Successfully Saved by {current_logged_user}!"
+                " Email report sent to Admin."
+            )
+            st.rerun()
+
+    st.subheader("Saved Dispatch Entries")
+    df_disp_saved = load_data("dispatch")
+    if not df_disp_saved.empty:
+        st.dataframe(df_disp_saved, use_container_width=True)
 
 elif menu == "6. Master Records & Export (Admin Controls)":
-    st.subheader("Admin Controls & Master Records Export")
+    st.markdown(
+        """
+        <div class="hero-banner">
+            <h1>Admin Controls & Master Records Export</h1>
+            <p>Manage employees, view all system master data tables, and export reports.</p>
+        </div>
+    """,
+        unsafe_allow_html=True,
+    )
+
     if current_logged_user != "Rishabh Admin":
         st.warning(
             "Yeh section sirf Admin (Rishabh Admin) ke liye accessible hai."
         )
     else:
-        st.write("Manage Employees & PINs here:")
+        st.write("### 👥 Employees & PIN Master")
         df_emp = load_data("employees")
         st.dataframe(df_emp, use_container_width=True)
+
+        st.divider()
+        st.write("### 📦 All System Master Records & Export Data")
+
+        tab1, tab2, tab3, tab4, tab5 = st.tabs(
+            [
+                "Raw Material",
+                "Milling & Quality",
+                "Finished Goods",
+                "Packing Material",
+                "Dispatch",
+            ]
+        )
+
+        with tab1:
+            df_rm_all = load_data("raw_material")
+            if df_rm_all.empty:
+                st.info("No Raw Material records available.")
+            else:
+                st.dataframe(df_rm_all, use_container_width=True)
+                csv_rm = df_rm_all.to_csv(index=False).encode("utf-8")
+                st.download_button(
+                    "📥 Download Raw Material CSV",
+                    csv_rm,
+                    "raw_material_master.csv",
+                    "text/csv",
+                )
+
+        with tab2:
+            df_m_all = load_data("milling")
+            df_q_all = load_data("quality")
+            if df_m_all.empty:
+                st.info("No Milling records available.")
+            else:
+                if not df_q_all.empty and "milling_id" in df_q_all.columns:
+                    df_mq_comb = pd.merge(
+                        df_m_all,
+                        df_q_all,
+                        left_on="id",
+                        right_on="milling_id",
+                        how="left",
+                        suffixes=("_milling", "_quality"),
+                    )
+                else:
+                    df_mq_comb = df_m_all
+                st.dataframe(df_mq_comb, use_container_width=True)
+                csv_mq = df_mq_comb.to_csv(index=False).encode("utf-8")
+                st.download_button(
+                    "📥 Download Milling & Quality CSV",
+                    csv_mq,
+                    "milling_quality_master.csv",
+                    "text/csv",
+                )
+
+        with tab3:
+            df_fg_all = load_data("finished_goods")
+            if df_fg_all.empty:
+                st.info("No Finished Goods records available.")
+            else:
+                st.dataframe(df_fg_all, use_container_width=True)
+                csv_fg = df_fg_all.to_csv(index=False).encode("utf-8")
+                st.download_button(
+                    "📥 Download Finished Goods CSV",
+                    csv_fg,
+                    "finished_goods_master.csv",
+                    "text/csv",
+                )
+
+        with tab4:
+            df_pm_all = load_data("packing_material")
+            if df_pm_all.empty:
+                st.info("No Packing Material records available.")
+            else:
+                st.dataframe(df_pm_all, use_container_width=True)
+                csv_pm = df_pm_all.to_csv(index=False).encode("utf-8")
+                st.download_button(
+                    "📥 Download Packing Material CSV",
+                    csv_pm,
+                    "packing_material_master.csv",
+                    "text/csv",
+                )
+
+        with tab5:
+            df_disp_all = load_data("dispatch")
+            if df_disp_all.empty:
+                st.info("No Dispatch records available.")
+            else:
+                st.dataframe(df_disp_all, use_container_width=True)
+                csv_disp = df_disp_all.to_csv(index=False).encode("utf-8")
+                st.download_button(
+                    "📥 Download Dispatch CSV",
+                    csv_disp,
+                    "dispatch_master.csv",
+                    "text/csv",
+                )
