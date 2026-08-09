@@ -1129,7 +1129,6 @@ elif menu == "3. Finished Goods & Yield":
             conn = get_connection()
             cursor = conn.cursor()
             
-            # Save individual SKU entries or aggregate
             cursor.execute("""
                 INSERT INTO finished_goods (production_date, miller_name, sku, mrp, qty_in_pouches, batch_code, mfd_date, use_by_date, bran_qty, chokar_qty, total_finished_qty, remarks, entered_by)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -1288,7 +1287,7 @@ elif menu == "6. Master Records & Export (Admin Controls)":
 
         st.divider()
         st.subheader("Database Table Explorer & Export")
-        table_choice = st.selectbox("Select Table to View", ["raw_material", "milling", "quality", "finished_goods", "packing_material", "dispatch", "employees"])
+        table_choice = st.selectbox("Test Table to View", ["raw_material", "milling", "quality", "finished_goods", "packing_material", "dispatch", "employees"])
         df_table = load_data(table_choice)
         st.dataframe(df_table, use_container_width=True)
 
