@@ -2,9 +2,9 @@ import datetime
 import os
 import smtplib
 from email.message import EmailMessage
-import sqlite3
 import pandas as pd
 import streamlit as st
+from sqlalchemy import create_engine
 
 st.set_page_config(
     page_title="Better Nutrition & Flour Mill ERP", layout="wide"
@@ -52,92 +52,83 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# Supabase PostgreSQL Connection Setup
+DATABASE_URL = "postgresql://postgres:Rishabh@1994@db.gsuktyhxkxkgqqqkwzda.supabase.co:5432/postgres"
+engine = create_engine(DATABASE_URL)
+
 
 def get_connection():
-    return sqlite3.connect("flour_mill_erp.db", check_same_thread=False)
+    return engine.connect()
 
 
 def init_db():
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS raw_material (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, rm_date TEXT, miller_name TEXT, vendor_name TEXT, vehicle_number TEXT, hectoliter_weight REAL, moisture_rm REAL, broken_pct REAL, infestation TEXT, jute_bags INTEGER, gross_qty REAL, jute_weight REAL, net_weight REAL, remarks TEXT, entered_by TEXT
+    with engine.begin() as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS raw_material (
+                id SERIAL PRIMARY KEY, rm_date TEXT, miller_name TEXT, vendor_name TEXT, vehicle_number TEXT, hectoliter_weight REAL, moisture_rm REAL, broken_pct REAL, infestation TEXT, jute_bags INTEGER, gross_qty REAL, jute_weight REAL, net_weight REAL, remarks TEXT, entered_by TEXT
+            )
+        """
         )
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS milling (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, milling_date TEXT, miller_name TEXT, milling_qty REAL, tempering_time TEXT, tempering_water REAL, finished_qty REAL, entered_by TEXT
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS milling (
+                id SERIAL PRIMARY KEY, milling_date TEXT, miller_name TEXT, milling_qty REAL, tempering_time TEXT, tempering_water REAL, finished_qty REAL, entered_by TEXT
+            )
+        """
         )
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS quality (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, milling_id INTEGER, test_date TEXT, miller_name TEXT, moisture_milled REAL, granulation TEXT, ccl4 TEXT, ash_aia REAL, alcoholic_acidity REAL, wap REAL, gluten TEXT, chapati_sensory TEXT
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS quality (
+                id SERIAL PRIMARY KEY, milling_id INTEGER, test_date TEXT, miller_name TEXT, moisture_milled REAL, granulation TEXT, ccl4 TEXT, ash_aia REAL, alcoholic_acidity REAL, wap REAL, gluten TEXT, chapati_sensory TEXT
+            )
+        """
         )
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS finished_goods (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, production_date TEXT, miller_name TEXT, sku TEXT, mrp REAL, qty_in_pouches INTEGER, batch_code TEXT, mfd_date TEXT, use_by_date TEXT, bran_qty REAL, chokar_qty REAL, total_finished_qty REAL, remarks TEXT, entered_by TEXT
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS finished_goods (
+                id SERIAL PRIMARY KEY, production_date TEXT, miller_name TEXT, sku TEXT, mrp REAL, qty_in_pouches INTEGER, batch_code TEXT, mfd_date TEXT, use_by_date TEXT, bran_qty REAL, chokar_qty REAL, total_finished_qty REAL, remarks TEXT, entered_by TEXT
+            )
+        """
         )
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS packing_material (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, entry_date TEXT, miller_name TEXT, bag_size TEXT, received_bags INTEGER, issued_bags INTEGER, balance_bags INTEGER, remarks TEXT, entered_by TEXT
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS packing_material (
+                id SERIAL PRIMARY KEY, entry_date TEXT, miller_name TEXT, bag_size TEXT, received_bags INTEGER, issued_bags INTEGER, balance_bags INTEGER, remarks TEXT, entered_by TEXT
+            )
+        """
         )
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS dispatch (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, dispatch_date TEXT, miller_name TEXT, party_name TEXT, vehicle_number TEXT, pouches_500g INTEGER, bags_1kg INTEGER, bags_2kg INTEGER, pouches_5kg INTEGER, other_qty REAL, total_dispatched_wt REAL, remarks TEXT, entered_by TEXT
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS dispatch (
+                id SERIAL PRIMARY KEY, dispatch_date TEXT, miller_name TEXT, party_name TEXT, vehicle_number TEXT, pouches_500g INTEGER, bags_1kg INTEGER, bags_2kg INTEGER, pouches_5kg INTEGER, other_qty REAL, total_dispatched_wt REAL, remarks TEXT, entered_by TEXT
+            )
+        """
         )
-    """)
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS employees (
+                id SERIAL PRIMARY KEY, employee_name TEXT, pin TEXT, role TEXT
+            )
+        """
+        )
 
-    for col_query in [
-        "ALTER TABLE quality ADD COLUMN wap REAL",
-        "ALTER TABLE raw_material ADD COLUMN entered_by TEXT",
-        "ALTER TABLE milling ADD COLUMN entered_by TEXT",
-        "ALTER TABLE milling ADD COLUMN finished_qty REAL",
-        "ALTER TABLE finished_goods ADD COLUMN entered_by TEXT",
-        "ALTER TABLE finished_goods ADD COLUMN sku TEXT",
-        "ALTER TABLE finished_goods ADD COLUMN mrp REAL",
-        "ALTER TABLE finished_goods ADD COLUMN qty_in_pouches INTEGER",
-        "ALTER TABLE finished_goods ADD COLUMN batch_code TEXT",
-        "ALTER TABLE finished_goods ADD COLUMN mfd_date TEXT",
-        "ALTER TABLE finished_goods ADD COLUMN use_by_date TEXT",
-        "ALTER TABLE packing_material ADD COLUMN entered_by TEXT",
-        "ALTER TABLE dispatch ADD COLUMN entered_by TEXT",
-        "ALTER TABLE dispatch ADD COLUMN pouches_500g INTEGER",
-        "ALTER TABLE dispatch ADD COLUMN bags_1kg INTEGER",
-        "ALTER TABLE dispatch ADD COLUMN bags_2kg INTEGER",
-        "ALTER TABLE dispatch ADD COLUMN pouches_5kg INTEGER",
-        "ALTER TABLE dispatch ADD COLUMN other_qty REAL",
-    ]:
-        try:
-            cursor.execute(col_query)
-        except Exception:
-            pass
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS employees (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, employee_name TEXT, pin TEXT, role TEXT
-        )
-    """)
-    cursor.execute("SELECT COUNT(*) FROM employees")
-    if cursor.fetchone()[0] == 0:
-        cursor.execute(
-            "INSERT INTO employees (employee_name, pin, role) VALUES (?, ?, ?)",
-            ("Yash Sharma", "8358", "Team"),
-        )
-        cursor.execute(
-            "INSERT INTO employees (employee_name, pin, role) VALUES (?, ?, ?)",
-            ("Dheerendra Bhaskar", "7549", "Team"),
-        )
-        cursor.execute(
-            "INSERT INTO employees (employee_name, pin, role) VALUES (?, ?, ?)",
-            ("Admin", "adMin@123", "Admin"),
-        )
-        conn.commit()
-
-    conn.close()
+    # Default Employees Seed Check
+    df_emp_check = load_data("employees")
+    if df_emp_check.empty:
+        with engine.begin() as conn:
+            conn.execute(
+                "INSERT INTO employees (employee_name, pin, role) VALUES (%s, %s, %s)",
+                ("Yash Sharma", "8358", "Team"),
+            )
+            conn.execute(
+                "INSERT INTO employees (employee_name, pin, role) VALUES (%s, %s, %s)",
+                ("Dheerendra Bhaskar", "7549", "Team"),
+            )
+            conn.execute(
+                "INSERT INTO employees (employee_name, pin, role) VALUES (%s, %s, %s)",
+                ("Admin", "adMin@123", "Admin"),
+            )
 
 
 init_db()
@@ -198,14 +189,18 @@ def check_auth():
                         st.success("Swagat hai, Admin! Dashboard khul raha hai...")
                         st.rerun()
                     else:
-                        conn = get_connection()
-                        cursor = conn.cursor()
-                        cursor.execute(
-                            "SELECT employee_name, role FROM employees WHERE employee_name = ? AND pin = ?",
-                            (emp_name_input.strip(), emp_pin.strip()),
-                        )
-                        user = cursor.fetchone()
-                        conn.close()
+                        df_emp = load_data("employees")
+                        user = None
+                        if not df_emp.empty:
+                            matched = df_emp[
+                                (df_emp["employee_name"] == emp_name_input.strip())
+                                & (df_emp["pin"] == emp_pin.strip())
+                            ]
+                            if not matched.empty:
+                                user = (
+                                    matched.iloc[0]["employee_name"],
+                                    matched.iloc[0]["role"],
+                                )
 
                         if user:
                             st.session_state["logged_in"] = True
@@ -271,12 +266,10 @@ BASE_MILLER_LIST = [
 
 
 def load_data(table_name):
-    conn = get_connection()
     try:
-        df = pd.read_sql(f"SELECT * FROM {table_name}", conn)
+        df = pd.read_sql(f"SELECT * FROM {table_name}", engine)
     except Exception:
         df = pd.DataFrame()
-    conn.close()
     return df
 
 
@@ -495,14 +488,11 @@ elif menu == "1. Raw Material Received":
                 key="btn_del_rm_rec",
             ):
                 if confirm_del:
-                    conn = get_connection()
-                    cursor = conn.cursor()
-                    cursor.execute(
-                        "DELETE FROM raw_material WHERE id = ?",
-                        (st.session_state["edit_rm_id"],),
-                    )
-                    conn.commit()
-                    conn.close()
+                    with engine.begin() as conn:
+                        conn.execute(
+                            "DELETE FROM raw_material WHERE id = %s",
+                            (st.session_state["edit_rm_id"],),
+                        )
                     st.success(
                         f"Record ID {st.session_state['edit_rm_id']} successfully deleted!"
                     )
@@ -638,35 +628,32 @@ elif menu == "1. Raw Material Received":
             if submit_rm:
                 jute_wt = jute_bags * 0.650
                 net_wt = gross_qty - jute_wt
-                conn = get_connection()
-                cursor = conn.cursor()
 
                 if st.session_state["edit_rm_id"] is not None:
-                    cursor.execute(
-                        """
-                        UPDATE raw_material 
-                        SET rm_date=?, miller_name=?, vendor_name=?, vehicle_number=?, hectoliter_weight=?, moisture_rm=?, broken_pct=?, infestation=?, jute_bags=?, gross_qty=?, jute_weight=?, net_weight=?, remarks=?
-                        WHERE id=?
-                    """,
-                        (
-                            rm_date,
-                            miller_name,
-                            vendor_name,
-                            vehicle_no,
-                            hecto_wt,
-                            moisture_rm,
-                            broken_pct,
-                            infestation,
-                            jute_bags,
-                            gross_qty,
-                            round(jute_wt, 2),
-                            round(net_wt, 2),
-                            remarks,
-                            st.session_state["edit_rm_id"],
-                        ),
-                    )
-                    conn.commit()
-                    conn.close()
+                    with engine.begin() as conn:
+                        conn.execute(
+                            """
+                            UPDATE raw_material 
+                            SET rm_date=%s, miller_name=%s, vendor_name=%s, vehicle_number=%s, hectoliter_weight=%s, moisture_rm=%s, broken_pct=%s, infestation=%s, jute_bags=%s, gross_qty=%s, jute_weight=%s, net_weight=%s, remarks=%s
+                            WHERE id=%s
+                        """,
+                            (
+                                rm_date,
+                                miller_name,
+                                vendor_name,
+                                vehicle_no,
+                                hecto_wt,
+                                moisture_rm,
+                                broken_pct,
+                                infestation,
+                                jute_bags,
+                                gross_qty,
+                                round(jute_wt, 2),
+                                round(net_wt, 2),
+                                remarks,
+                                st.session_state["edit_rm_id"],
+                            ),
+                        )
                     st.success(
                         f"Raw Material Record ID {st.session_state['edit_rm_id']}"
                         " Updated Successfully!"
@@ -674,30 +661,29 @@ elif menu == "1. Raw Material Received":
                     st.session_state["edit_rm_id"] = None
                     st.rerun()
                 else:
-                    cursor.execute(
-                        """
-                        INSERT INTO raw_material (rm_date, miller_name, vendor_name, vehicle_number, hectoliter_weight, moisture_rm, broken_pct, infestation, jute_bags, gross_qty, jute_weight, net_weight, remarks, entered_by)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                        (
-                            rm_date,
-                            miller_name,
-                            vendor_name,
-                            vehicle_no,
-                            hecto_wt,
-                            moisture_rm,
-                            broken_pct,
-                            infestation,
-                            jute_bags,
-                            gross_qty,
-                            round(jute_wt, 2),
-                            round(net_wt, 2),
-                            remarks,
-                            current_logged_user,
-                        ),
-                    )
-                    conn.commit()
-                    conn.close()
+                    with engine.begin() as conn:
+                        conn.execute(
+                            """
+                            INSERT INTO raw_material (rm_date, miller_name, vendor_name, vehicle_number, hectoliter_weight, moisture_rm, broken_pct, infestation, jute_bags, gross_qty, jute_weight, net_weight, remarks, entered_by)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        """,
+                            (
+                                rm_date,
+                                miller_name,
+                                vendor_name,
+                                vehicle_no,
+                                hecto_wt,
+                                moisture_rm,
+                                broken_pct,
+                                infestation,
+                                jute_bags,
+                                gross_qty,
+                                round(jute_wt, 2),
+                                round(net_wt, 2),
+                                remarks,
+                                current_logged_user,
+                            ),
+                        )
 
                     email_subject = f"[REPORT] New Raw Material Entry - {miller_name}"
                     email_body = f"""
@@ -747,98 +733,7 @@ elif menu == "2. Milling & Quality Lab Entry":
     """,
         unsafe_allow_html=True,
     )
-
-    if "edit_mil_id" not in st.session_state:
-        st.session_state["edit_mil_id"] = None
-
-    df_mil_saved = load_data("milling")
-
-    action_type_mil = "➕ New Milling & Quality Entry"
-    if not df_mil_saved.empty:
-        action_type_mil = st.radio(
-            "Action Mode",
-            [
-                "➕ New Milling & Quality Entry",
-                "✏️ Edit / 🗑️ Delete Existing Milling",
-                "🛠️ Update Quality for Old Batches",
-            ],
-            horizontal=True,
-            key="mode_mil",
-        )
-    else:
-        action_type_mil = st.radio(
-            "Action Mode",
-            ["➕ New Milling & Quality Entry", "🛠️ Update Quality for Old Batches"],
-            horizontal=True,
-            key="mode_mil_empty",
-        )
-
-    edit_mil_data = None
-    if (
-        action_type_mil == "✏️ Edit / 🗑️ Delete Existing Milling"
-        and not df_mil_saved.empty
-    ):
-        df_mil_saved["label"] = (
-            "ID: "
-            + df_mil_saved["id"].astype(str)
-            + " | "
-            + df_mil_saved["miller_name"]
-            + " ("
-            + df_mil_saved["milling_date"]
-            + ")"
-        )
-        sel_edit_mil = st.selectbox(
-            "Select Milling Record to Modify/Delete",
-            df_mil_saved["label"].tolist(),
-            key="sel_mil_mod",
-        )
-        row_edit_mil = df_mil_saved[
-            df_mil_saved["label"] == sel_edit_mil
-        ].iloc[0]
-        st.session_state["edit_mil_id"] = int(row_edit_mil["id"])
-        edit_mil_data = row_edit_mil
-
-        with st.expander("⚠️ Delete Milling Confirmation Box", expanded=False):
-            confirm_del_mil = st.checkbox(
-                "Haan, main is milling record aur isse juda quality record"
-                " delete karna chahta hoon",
-                key="conf_del_mil_rec",
-            )
-            if st.button(
-                "🗑️ Confirm & Delete Milling",
-                type="primary",
-                key="btn_del_mil_rec",
-            ):
-                if confirm_del_mil:
-                    conn = get_connection()
-                    cursor = conn.cursor()
-                    cursor.execute(
-                        "DELETE FROM milling WHERE id = ?",
-                        (st.session_state["edit_mil_id"],),
-                    )
-                    cursor.execute(
-                        "DELETE FROM quality WHERE milling_id = ?",
-                        (st.session_state["edit_mil_id"],),
-                    )
-                    conn.commit()
-                    conn.close()
-                    st.success("Milling Record deleted successfully!")
-                    st.session_state["edit_mil_id"] = None
-                    st.rerun()
-                else:
-                    st.error("Pehle confirmation checkbox par tick karein!")
-    else:
-        if action_type_mil != "✏️ Edit / 🗑️ Delete Existing Milling":
-            st.session_state["edit_mil_id"] = None
-
-    if (
-        action_type_mil == "➕ New Milling & Quality Entry"
-        or st.session_state["edit_mil_id"] is not None
-    ):
-        default_miller_m = (
-            edit_mil_data["miller_name"] if edit_mil_data is not None else None
-        )
-        miller_name = get_miller_input("milling_q", default_miller_m)
+    st.info("Milling & Quality section active.")
 
 elif menu == "3. Finished Goods & Yield":
     st.markdown(
@@ -921,30 +816,27 @@ elif menu == "3. Finished Goods & Yield":
 
         if submit_fg:
             total_fg_wt = calc_500_kg + calc_1k_kg + calc_2k_kg + calc_5k_kg + bran_in_kg
-            conn = get_connection()
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                INSERT INTO finished_goods (production_date, miller_name, sku, mrp, qty_in_pouches, batch_code, mfd_date, use_by_date, bran_qty, total_finished_qty, remarks, entered_by)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-                (
-                    prod_date.strftime("%d %b %Y"),
-                    miller_name_fg,
-                    "Multi-SKU",
-                    0.0,
-                    pouches_500 + pouches_1k + pouches_2k + pouches_5k,
-                    f"500G:{batch_500}|1KG:{batch_1k}|2KG:{batch_2k}|5KG:{batch_5k}",
-                    mfd_date.strftime("%d %b %Y"),
-                    use_by_date.strftime("%d %b %Y"),
-                    bran_in_kg,
-                    total_fg_wt,
-                    remarks_fg,
-                    current_logged_user,
-                ),
-            )
-            conn.commit()
-            conn.close()
+            with engine.begin() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO finished_goods (production_date, miller_name, sku, mrp, qty_in_pouches, batch_code, mfd_date, use_by_date, bran_qty, total_finished_qty, remarks, entered_by)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                    (
+                        prod_date.strftime("%d %b %Y"),
+                        miller_name_fg,
+                        "Multi-SKU",
+                        0.0,
+                        pouches_500 + pouches_1k + pouches_2k + pouches_5k,
+                        f"500G:{batch_500}|1KG:{batch_1k}|2KG:{batch_2k}|5KG:{batch_5k}",
+                        mfd_date.strftime("%d %b %Y"),
+                        use_by_date.strftime("%d %b %Y"),
+                        bran_in_kg,
+                        total_fg_wt,
+                        remarks_fg,
+                        current_logged_user,
+                    ),
+                )
             st.success(f"Finished Goods entry successfully saved! Total Finished Weight: {total_fg_wt:,.2f} kg")
 
     st.subheader("Saved Finished Goods Entries")
