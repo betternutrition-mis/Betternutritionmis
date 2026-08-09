@@ -204,7 +204,7 @@ menu = st.sidebar.radio("Navigation Menu", [
     "2. Raw Material Quality Lab",
     "3. Milling Entry",
     "4. Finished Goods Entry",
-    "5. Dashboards",
+    "5. Dashboards & Stock Ledger",
     "6. Master Records & Admin"
 ])
 
@@ -699,7 +699,6 @@ elif menu == "4. Finished Goods Entry":
                 conn = get_connection()
                 cursor = conn.cursor()
                 if st.session_state["edit_fg_id"] is not None:
-                    # Update single record
                     row = form_sku_data[0]
                     cursor.execute("""
                         UPDATE finished_goods 
@@ -713,7 +712,6 @@ elif menu == "4. Finished Goods Entry":
                     st.session_state["sku_rows_count"] = 1
                     st.rerun()
                 else:
-                    # Insert all rows
                     for row in form_sku_data:
                         cursor.execute("""
                             INSERT INTO finished_goods (production_date, miller_name, sku, mfd_date, use_by_date, mrp, batch_number, qty, drop_test, sealing, entered_by)
@@ -738,17 +736,18 @@ elif menu == "4. Finished Goods Entry":
         st.dataframe(df_fg_disp, use_container_width=True)
 
 # ==========================================
-# 5. DASHBOARDS
+# 5. DASHBOARDS & STOCK LEDGER
 # ==========================================
-elif menu == "5. Dashboards":
+elif menu == "5. Dashboards & Stock Ledger":
     st.markdown("""
         <div class="hero-banner">
-            <h1>ERP Analytical Dashboards</h1>
-            <p>View Raw Material, Milling, Finished Goods, and Quality insights filtered by Miller and Date/Month.</p>
+            <h1>ERP Analytical Dashboards & Stock Ledger</h1>
+            <p>View Raw Material, Milling, Finished Goods, and Date-wise Opening/Closing Stock Ledger.</p>
         </div>
     """, unsafe_allow_html=True)
 
-    dash_tab1, dash_tab2, dash_tab3, dash_tab4 = st.tabs([
+    dash_tab1, dash_tab2, dash_tab3, dash_tab4, dash_tab5 = st.tabs([
+        "📅 Stock Ledger (Opening/Closing)",
         "📦 Raw Material Receiving",
         "⚙️ Milling Material Dashboard",
         "🏭 Finished Good Dashboard",
@@ -756,6 +755,74 @@ elif menu == "5. Dashboards":
     ])
 
     with dash_tab1:
+        st.subheader("📅 Date-wise Opening & Closing Stock Ledger")
+        
+        df_rm = load_data("raw_material")
+        df_mil = load_data("milling")
+        df_fg = load_data("finished_goods")
+        
+        if df_rm.empty and df_mil.empty and df_fg.empty:
+            st.info("Koi stock data available nahi hai.")
+        else:
+            all_millers = []
+            if not df_rm.empty: all_millers.extend(df_rm["miller_name"].dropna().unique().tolist())
+            if not df_mil.empty: all_millers.extend(df_mil["miller_name"].dropna().unique().tolist())
+            if not df_fg.empty: all_millers.extend(df_fg["miller_name"].dropna().unique().tolist())
+            all_millers = list(set(all_millers))
+            
+            sel_miller_ledger = st.selectbox("Select Miller for Ledger", all_millers, key="ledger_miller")
+            
+            if sel_miller_ledger:
+                st.markdown(f"### Stock Ledger for Miller: **{sel_miller_ledger}**")
+                
+                # --- RAW MATERIAL STOCK LEDGER ---
+                st.write("#### 📦 Raw Material (Wheat / Grain) Stock Ledger (kg)")
+                df_rm_m = df_rm[df_rm["miller_name"] == sel_miller_ledger].copy() if not df_rm.empty else pd.DataFrame()
+                df_mil_m = df_mil[df_mil["miller_name"] == sel_miller_ledger].copy() if not df_mil.empty else pd.DataFrame()
+                
+                # Extract unique dates from both RM receiving and Milling usage
+                rm_dates = df_rm_m["entry_date"].tolist() if not df_rm_m.empty else []
+                mil_dates = df_mil_m["milling_date"].tolist() if not df_mil_m.empty else []
+                all_dates = sorted(list(set(rm_dates + mil_dates)), key=lambda x: datetime.datetime.strptime(x, "%d %b %Y"))
+                
+                if all_dates:
+                    ledger_rows = []
+                    running_stock = 0.0
+                    
+                    for d in all_dates:
+                        inflow = df_rm_m[df_rm_m["entry_date"] == d]["net_wt"].sum() if not df_rm_m.empty else 0.0
+                        outflow = df_mil_m[df_mil_m["milling_date"] == d]["milling_qty"].sum() if not df_mil_m.empty else 0.0
+                        
+                        opening = running_stock
+                        closing = opening + inflow - outflow
+                        running_stock = closing
+                        
+                        ledger_rows.append({
+                            "Date": d,
+                            "Opening Stock (kg)": round(opening, 2),
+                            "Inflow (Received) (kg)": round(inflow, 2),
+                            "Outflow (Milled) (kg)": round(outflow, 2),
+                            "Closing Stock (kg)": round(closing, 2)
+                        })
+                    
+                    df_rm_ledger = pd.DataFrame(ledger_rows)
+                    st.dataframe(df_rm_ledger, use_container_width=True)
+                else:
+                    st.info("Is miller ke liye koi Raw Material ya Milling transactions nahi hain.")
+
+                st.divider()
+
+                # --- FINISHED GOODS PRODUCTION LEDGER ---
+                st.write("#### 🏭 Finished Goods Production Ledger (SKU-wise Qty)")
+                df_fg_m = df_fg[df_fg["miller_name"] == sel_miller_ledger].copy() if not df_fg.empty else pd.DataFrame()
+                if not df_fg_m.empty:
+                    fg_grouped = df_fg_m.groupby(["production_date", "sku"])["qty"].sum().reset_index()
+                    fg_grouped.columns = ["Date", "SKU", "Produced Qty (Inflow)"]
+                    st.dataframe(fg_grouped, use_container_width=True)
+                else:
+                    st.info("Is miller ke liye koi Finished Goods record nahi hai.")
+
+    with dash_tab2:
         st.subheader("Raw Material Receiving Dashboard (Miller & Month Wise)")
         df_rm = load_data("raw_material")
         if df_rm.empty:
@@ -788,7 +855,7 @@ elif menu == "5. Dashboards":
             st.metric("Total Bags Received", f"{df_filtered_rm['total_bags'].sum():,}")
             st.dataframe(df_filtered_rm.drop(columns=["month_year"], errors="ignore"), use_container_width=True)
 
-    with dash_tab2:
+    with dash_tab3:
         st.subheader("Milling Material Dashboard (Miller & Date Wise)")
         df_mil = load_data("milling")
         if df_mil.empty:
@@ -811,7 +878,7 @@ elif menu == "5. Dashboards":
             st.metric("Total Milling Qty Processed (kg)", f"{df_filtered_mil['milling_qty'].sum():,.2f}")
             st.dataframe(df_filtered_mil, use_container_width=True)
 
-    with dash_tab3:
+    with dash_tab4:
         st.subheader("Finished Good Dashboard (Miller & Date Wise)")
         df_fg = load_data("finished_goods")
         if df_fg.empty:
@@ -834,7 +901,7 @@ elif menu == "5. Dashboards":
             st.metric("Total Finished Units Produced", f"{df_filtered_fg['qty'].sum():,}")
             st.dataframe(df_filtered_fg, use_container_width=True)
 
-    with dash_tab4:
+    with dash_tab5:
         st.subheader("Quality Lab Dashboard (Batch Wise)")
         df_rmq = load_data("raw_material_quality")
         if df_rmq.empty:
