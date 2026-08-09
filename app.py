@@ -114,9 +114,6 @@ def load_data(table_name):
     conn.close()
     return df
 
-def send_email_alert(subject, body):
-    pass
-
 def get_miller_input(key_prefix, default_val=None):
     conn = get_connection()
     df_emp = pd.read_sql("SELECT employee_name FROM employees", conn)
@@ -560,7 +557,7 @@ elif menu == "3. Milling Entry":
         st.dataframe(df_mil_disp, use_container_width=True)
 
 # ==========================================
-# 4. FINISHED GOODS ENTRY
+# 4. FINISHED GOODS ENTRY (WITH MULTI-SKU ADD)
 # ==========================================
 elif menu == "4. Finished Goods Entry":
     st.markdown("""
@@ -611,59 +608,89 @@ elif menu == "4. Finished Goods Entry":
         default_miller_fg = edit_fg_data["miller_name"] if edit_fg_data is not None else None
         miller_name = get_miller_input("fg", default_miller_fg)
 
+        # Multi-SKU dynamic rows state handling
+        if "sku_rows_count" not in st.session_state:
+            st.session_state["sku_rows_count"] = 1
+
+        if st.session_state["edit_fg_id"] is not None:
+            st.session_state["sku_rows_count"] = 1
+
         sku_options = ["Sku 500gm", "Sku 1kg", "Sku 2kg", "Sku 5kg"]
-        default_sku_idx = 0
-        if edit_fg_data is not None and edit_fg_data["sku"] in sku_options:
-            default_sku_idx = sku_options.index(edit_fg_data["sku"])
 
         with st.form("finished_goods_form"):
-            sku = st.selectbox("Select SKU", sku_options, index=default_sku_idx)
+            form_sku_data = []
             
-            fc1, fc2, fc3 = st.columns(3)
-            with fc1:
-                prod_date_val = datetime.date.today()
-                if edit_fg_data is not None and pd.notnull(edit_fg_data["production_date"]):
-                    try:
-                        prod_date_val = datetime.datetime.strptime(edit_fg_data["production_date"], "%d %b %Y").date()
-                    except Exception:
-                        pass
-                prod_obj = st.date_input("Date", value=prod_date_val)
-                production_date = prod_obj.strftime("%d %b %Y")
+            for i in range(st.session_state["sku_rows_count"]):
+                if i > 0:
+                    st.markdown(f"--- **SKU Row {i+1}**")
+                
+                default_sku_idx = 0
+                default_mrp = 0.0
+                default_batch = ""
+                default_qty = 0
+                default_drop = ""
+                default_sealing = ""
+                
+                if i == 0 and edit_fg_data is not None:
+                    if edit_fg_data["sku"] in sku_options:
+                        default_sku_idx = sku_options.index(edit_fg_data["sku"])
+                    default_mrp = float(edit_fg_data["mrp"]) if pd.notnull(edit_fg_data["mrp"]) else 0.0
+                    default_batch = edit_fg_data["batch_number"] if pd.notnull(edit_fg_data["batch_number"]) else ""
+                    default_qty = int(edit_fg_data["qty"]) if pd.notnull(edit_fg_data["qty"]) else 0
+                    default_drop = edit_fg_data["drop_test"] if pd.notnull(edit_fg_data["drop_test"]) else ""
+                    default_sealing = edit_fg_data["sealing"] if pd.notnull(edit_fg_data["sealing"]) else ""
 
-                mfd_val = datetime.date.today()
-                if edit_fg_data is not None and pd.notnull(edit_fg_data["mfd_date"]):
-                    try:
-                        mfd_val = datetime.datetime.strptime(edit_fg_data["mfd_date"], "%d %b %Y").date()
-                    except Exception:
-                        pass
-                mfd_obj = st.date_input("MFD", value=mfd_val)
-                mfd_date = mfd_obj.strftime("%d %b %Y")
+                sku = st.selectbox(f"Select SKU {i+1}", sku_options, index=default_sku_idx, key=f"sku_{i}")
+                
+                fc1, fc2, fc3 = st.columns(3)
+                with fc1:
+                    prod_date_val = datetime.date.today()
+                    if i == 0 and edit_fg_data is not None and pd.notnull(edit_fg_data["production_date"]):
+                        try:
+                            prod_date_val = datetime.datetime.strptime(edit_fg_data["production_date"], "%d %b %Y").date()
+                        except Exception:
+                            pass
+                    prod_obj = st.date_input(f"Date {i+1}", value=prod_date_val, key=f"prod_date_{i}")
+                    production_date = prod_obj.strftime("%d %b %Y")
 
-                use_val = datetime.date.today() + datetime.timedelta(days=90)
-                if edit_fg_data is not None and pd.notnull(edit_fg_data["use_by_date"]):
-                    try:
-                        use_val = datetime.datetime.strptime(edit_fg_data["use_by_date"], "%d %b %Y").date()
-                    except Exception:
-                        pass
-                use_obj = st.date_input("Use BY", value=use_val)
-                use_by_date = use_obj.strftime("%d %b %Y")
+                    mfd_val = datetime.date.today()
+                    if i == 0 and edit_fg_data is not None and pd.notnull(edit_fg_data["mfd_date"]):
+                        try:
+                            mfd_val = datetime.datetime.strptime(edit_fg_data["mfd_date"], "%d %b %Y").date()
+                        except Exception:
+                            pass
+                    mfd_obj = st.date_input(f"MFD {i+1}", value=mfd_val, key=f"mfd_{i}")
+                    mfd_date = mfd_obj.strftime("%d %b %Y")
 
-            with fc2:
-                default_mrp = float(edit_fg_data["mrp"]) if edit_fg_data is not None and pd.notnull(edit_fg_data["mrp"]) else 0.0
-                mrp = st.number_input("MRP (₹)", min_value=0.0, value=default_mrp, step=10.0)
+                    use_val = datetime.date.today() + datetime.timedelta(days=90)
+                    if i == 0 and edit_fg_data is not None and pd.notnull(edit_fg_data["use_by_date"]):
+                        try:
+                            use_val = datetime.datetime.strptime(edit_fg_data["use_by_date"], "%d %b %Y").date()
+                        except Exception:
+                            pass
+                    use_obj = st.date_input(f"Use BY {i+1}", value=use_val, key=f"use_{i}")
+                    use_by_date = use_obj.strftime("%d %b %Y")
 
-                default_batch = edit_fg_data["batch_number"] if edit_fg_data is not None and pd.notnull(edit_fg_data["batch_number"]) else ""
-                batch_number = st.text_input("Batch Number", value=default_batch)
+                with fc2:
+                    mrp = st.number_input(f"MRP (₹) {i+1}", min_value=0.0, value=default_mrp, step=10.0, key=f"mrp_{i}")
+                    batch_number = st.text_input(f"Batch Number {i+1}", value=default_batch, key=f"batch_{i}")
+                    qty = st.number_input(f"QTY (Units / Pouches) {i+1}", min_value=0, value=default_qty, step=10, key=f"qty_{i}")
 
-                default_qty = int(edit_fg_data["qty"]) if edit_fg_data is not None and pd.notnull(edit_fg_data["qty"]) else 0
-                qty = st.number_input("QTY (Units / Pouches)", min_value=0, value=default_qty, step=10)
+                with fc3:
+                    drop_test = st.text_input(f"Drop Test {i+1}", value=default_drop, placeholder="e.g. Pass / Fail", key=f"drop_{i}")
+                    sealing = st.text_input(f"Sealing {i+1}", value=default_sealing, placeholder="e.g. Excellent / Good", key=f"seal_{i}")
 
-            with fc3:
-                default_drop = edit_fg_data["drop_test"] if edit_fg_data is not None and pd.notnull(edit_fg_data["drop_test"]) else ""
-                drop_test = st.text_input("Drop Test", value=default_drop, placeholder="e.g. Pass / Fail")
-
-                default_sealing = edit_fg_data["sealing"] if edit_fg_data is not None and pd.notnull(edit_fg_data["sealing"]) else ""
-                sealing = st.text_input("Sealing", value=default_sealing, placeholder="e.g. Excellent / Good")
+                form_sku_data.append({
+                    "sku": sku,
+                    "production_date": production_date,
+                    "mfd_date": mfd_date,
+                    "use_by_date": use_by_date,
+                    "mrp": mrp,
+                    "batch_number": batch_number,
+                    "qty": qty,
+                    "drop_test": drop_test,
+                    "sealing": sealing
+                })
 
             btn_fg_label = "Update Finished Goods Record" if st.session_state["edit_fg_id"] is not None else "Save Finished Goods Entry"
             submit_fg = st.form_submit_button(label=btn_fg_label)
@@ -672,25 +699,37 @@ elif menu == "4. Finished Goods Entry":
                 conn = get_connection()
                 cursor = conn.cursor()
                 if st.session_state["edit_fg_id"] is not None:
+                    # Update single record
+                    row = form_sku_data[0]
                     cursor.execute("""
                         UPDATE finished_goods 
                         SET production_date=?, miller_name=?, sku=?, mfd_date=?, use_by_date=?, mrp=?, batch_number=?, qty=?, drop_test=?, sealing=?
                         WHERE id=?
-                    """, (production_date, miller_name, sku, mfd_date, use_by_date, mrp, batch_number, qty, drop_test, sealing, st.session_state["edit_fg_id"]))
+                    """, (row["production_date"], miller_name, row["sku"], row["mfd_date"], row["use_by_date"], row["mrp"], row["batch_number"], row["qty"], row["drop_test"], row["sealing"], st.session_state["edit_fg_id"]))
                     conn.commit()
                     conn.close()
                     st.success("Finished Goods Record Updated Successfully!")
                     st.session_state["edit_fg_id"] = None
+                    st.session_state["sku_rows_count"] = 1
                     st.rerun()
                 else:
-                    cursor.execute("""
-                        INSERT INTO finished_goods (production_date, miller_name, sku, mfd_date, use_by_date, mrp, batch_number, qty, drop_test, sealing, entered_by)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (production_date, miller_name, sku, mfd_date, use_by_date, mrp, batch_number, qty, drop_test, sealing, current_logged_user))
+                    # Insert all rows
+                    for row in form_sku_data:
+                        cursor.execute("""
+                            INSERT INTO finished_goods (production_date, miller_name, sku, mfd_date, use_by_date, mrp, batch_number, qty, drop_test, sealing, entered_by)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """, (row["production_date"], miller_name, row["sku"], row["mfd_date"], row["use_by_date"], row["mrp"], row["batch_number"], row["qty"], row["drop_test"], row["sealing"], current_logged_user))
                     conn.commit()
                     conn.close()
-                    st.success("Finished Goods Entry Saved Successfully!")
+                    st.success("Finished Goods Entries Saved Successfully!")
+                    st.session_state["sku_rows_count"] = 1
                     st.rerun()
+
+        # Add More SKU Button outside the form
+        if st.session_state["edit_fg_id"] is None:
+            if st.button("➕ Add More SKU"):
+                st.session_state["sku_rows_count"] += 1
+                st.rerun()
 
     st.divider()
     st.subheader("Saved Finished Goods Entries")
