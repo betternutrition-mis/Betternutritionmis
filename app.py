@@ -107,16 +107,14 @@ init_db()
 # --- HELPER FUNCTIONS ---
 def load_data(table_name):
     conn = get_connection()
-    df = pd.read_sql(f"SELECT * FROM raw_material WHERE 1=0", conn) if table_name == "raw_material" else pd.read_sql(f"SELECT * FROM {table_name}", conn)
     try:
         df = pd.read_sql(f"SELECT * FROM {table_name}", conn)
     except Exception:
-        pass
+        df = pd.DataFrame()
     conn.close()
     return df
 
 def send_email_alert(subject, body):
-    # Stub function for email alerting
     pass
 
 def get_miller_input(key_prefix, default_val=None):
@@ -152,10 +150,12 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- SESSION STATE LOGIN ---
+# --- SESSION STATE LOGIN CHECK ---
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
+if "user_name" not in st.session_state:
     st.session_state["user_name"] = ""
+if "user_role" not in st.session_state:
     st.session_state["user_role"] = ""
 
 if not st.session_state["logged_in"]:
@@ -307,7 +307,6 @@ if menu == "1. Raw Material Receiving":
                 default_bag_wt = float(edit_rm_data["bag_wt"]) if edit_rm_data is not None and pd.notnull(edit_rm_data["bag_wt"]) else 0.0
                 bag_wt = st.number_input("Bag Wt", min_value=0.0, value=default_bag_wt, step=0.1)
 
-            # Formula: Net Wt = Gross Qty - (Number Of total Bags * Bag Wt)
             net_wt = gross_qty - (total_bags * bag_wt)
             st.info(f"Calculated Net Wt (Gross Qty - [Total Bags * Bag Wt]): **{net_wt:,.2f}**")
 
@@ -717,14 +716,12 @@ elif menu == "5. Dashboards":
         "🧪 Quality Dashboard"
     ])
 
-    # --- TAB 1: Raw Material Receiving (Miller Wise, Month Wise) ---
     with dash_tab1:
         st.subheader("Raw Material Receiving Dashboard (Miller & Month Wise)")
         df_rm = load_data("raw_material")
         if df_rm.empty:
             st.info("No raw material records available.")
         else:
-            # Extract Month for filtering
             def extract_month(date_str):
                 try:
                     dt = datetime.datetime.strptime(str(date_str), "%d %b %Y")
@@ -752,7 +749,6 @@ elif menu == "5. Dashboards":
             st.metric("Total Bags Received", f"{df_filtered_rm['total_bags'].sum():,}")
             st.dataframe(df_filtered_rm.drop(columns=["month_year"], errors="ignore"), use_container_width=True)
 
-    # --- TAB 2: Milling Material Dashboard (Miller Wise, Date Wise with all milling details) ---
     with dash_tab2:
         st.subheader("Milling Material Dashboard (Miller & Date Wise)")
         df_mil = load_data("milling")
@@ -776,7 +772,6 @@ elif menu == "5. Dashboards":
             st.metric("Total Milling Qty Processed (kg)", f"{df_filtered_mil['milling_qty'].sum():,.2f}")
             st.dataframe(df_filtered_mil, use_container_width=True)
 
-    # --- TAB 3: Finished Good Dashboard (Miller Wise, Date Wise with all finished good details) ---
     with dash_tab3:
         st.subheader("Finished Good Dashboard (Miller & Date Wise)")
         df_fg = load_data("finished_goods")
@@ -800,7 +795,6 @@ elif menu == "5. Dashboards":
             st.metric("Total Finished Units Produced", f"{df_filtered_fg['qty'].sum():,}")
             st.dataframe(df_filtered_fg, use_container_width=True)
 
-    # --- TAB 4: Quality Dashboard (Batch wise only) ---
     with dash_tab4:
         st.subheader("Quality Lab Dashboard (Batch Wise)")
         df_rmq = load_data("raw_material_quality")
