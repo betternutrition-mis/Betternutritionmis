@@ -780,7 +780,6 @@ elif menu == "5. Dashboards & Stock Ledger":
                 df_rm_m = df_rm[df_rm["miller_name"] == sel_miller_ledger].copy() if not df_rm.empty else pd.DataFrame()
                 df_mil_m = df_mil[df_mil["miller_name"] == sel_miller_ledger].copy() if not df_mil.empty else pd.DataFrame()
                 
-                # Extract unique dates from both RM receiving and Milling usage
                 rm_dates = df_rm_m["entry_date"].tolist() if not df_rm_m.empty else []
                 mil_dates = df_mil_m["milling_date"].tolist() if not df_mil_m.empty else []
                 all_dates = sorted(list(set(rm_dates + mil_dates)), key=lambda x: datetime.datetime.strptime(x, "%d %b %Y"))
