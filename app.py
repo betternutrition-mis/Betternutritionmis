@@ -19,17 +19,24 @@ def init_connection():
         "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/drive"
     ]
-    creds_dict = dict(st.secrets["gcp_service_account"])
     
-    if "private_key" in creds_dict:
-        pk = creds_dict["private_key"]
-        if "\\n" in pk and "\n" not in pk:
-            pk = pk.replace("\\n", "\n")
-        creds_dict["private_key"] = pk
+    creds_dict = {
+        "type": st.secrets["gcp_service_account"]["type"],
+        "project_id": st.secrets["gcp_service_account"]["project_id"],
+        "private_key_id": st.secrets["gcp_service_account"]["private_key_id"],
+        "private_key": st.secrets["gcp_service_account"]["private_key"].replace("\\n", "\n"),
+        "client_email": st.secrets["gcp_service_account"]["client_email"],
+        "client_id": st.secrets["gcp_service_account"]["client_id"],
+        "auth_uri": st.secrets["gcp_service_account"]["auth_uri"],
+        "token_uri": st.secrets["gcp_service_account"]["token_uri"],
+        "auth_provider_x509_cert_url": st.secrets["gcp_service_account"]["auth_provider_x509_cert_url"],
+        "client_x509_cert_url": st.secrets["gcp_service_account"]["client_x509_cert_url"],
+        "universe_domain": st.secrets["gcp_service_account"].get("universe_domain", "googleapis.com")
+    }
 
     creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
     client = gspread.authorize(creds)
-    return client.open_by_key("1SfRrw4a6uDn8XL6EaKHvMkmcXiUeOzbb89vIuzeA0lg")
+    return client.open_by_key("1SfRrw4a6uDn8XL6EaKHvMkmcXiUeOzbb89vIuzA0lg")
 
 gc = init_connection()
 
