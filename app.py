@@ -2,7 +2,7 @@ import datetime
 import pandas as pd
 import streamlit as st
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+from google.oauth2.service_account import Credentials
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(
@@ -19,52 +19,36 @@ def init_connection():
         "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/drive"
     ]
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(
-        st.secrets["gcp_service_account"], scope
-    )
+    creds_dict = dict(st.secrets["gcp_service_account"])
+    creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
     client = gspread.authorize(creds)
-    # Aapki di gayi Google Sheet ki ID
     return client.open_by_key("1SfRrw4a6uDn8XL6EaKHvMkmcXiUeOzbb89vIuzeA0lg")
 
 gc = init_connection()
 
 # --- HELPER FUNCTIONS FOR GOOGLE SHEETS ---
 def load_data(table_name):
-    """
-    Google Sheets mein har table ko alag 'Worksheet' (Tab) ki tarah treat karenge.
-    Jaise: 'employees', 'raw_material', 'raw_material_quality', 'milling', 'finished_goods'
-    """
     try:
         worksheet = gc.worksheet(table_name)
         data = worksheet.get_all_records()
         return pd.DataFrame(data)
     except Exception as e:
-        # Agar worksheet pehle se nahi bani hai, toh khali DataFrame return karega
         return pd.DataFrame()
 
 def insert_data(table_name, data_dict):
-    """
-    Data ko Google Sheet ke respective tab mein append karne ke liye.
-    Agar tab nahi hai, toh automatically create karke headers set kar dega.
-    """
     try:
         worksheet = gc.worksheet(table_name)
     except Exception:
-        # Agar worksheet nahi mili, toh nayi bana lo aur headers daal do
         headers = list(data_dict.keys())
         worksheet = gc.add_worksheet(title=table_name, rows="1000", cols=str(len(headers)))
         worksheet.append_row(headers)
     
-    # Existing headers match karke row insert karna
     headers = worksheet.row_values(1)
-    row_values = [data_dict.get(h, "") for h in headers]
-    
-    # Agar headers khali nikle (matlab naya tab ho)
     if not headers:
         headers = list(data_dict.keys())
         worksheet.append_row(headers)
-        row_values = list(data_dict.values())
         
+    row_values = [data_dict.get(h, "") for h in headers]
     worksheet.append_row(row_values)
 
 def get_miller_input(key_prefix, default_val=None):
@@ -137,7 +121,6 @@ if not st.session_state["logged_in"]:
                 df_emp = load_data("employees")
                 res = None
                 if not df_emp.empty:
-                    # Column names ko string mein safely match karna
                     df_emp["employee_name"] = df_emp["employee_name"].astype(str)
                     df_emp["pin"] = df_emp["pin"].astype(str)
                     
