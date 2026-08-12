@@ -20,6 +20,11 @@ def init_connection():
         "https://www.googleapis.com/auth/drive"
     ]
     creds_dict = dict(st.secrets["gcp_service_account"])
+    
+    # Private key ke newline (\n) formatting ko fix karne ke liye
+    if "private_key" in creds_dict:
+        creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+
     creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
     client = gspread.authorize(creds)
     return client.open_by_key("1SfRrw4a6uDn8XL6EaKHvMkmcXiUeOzbb89vIuzeA0lg")
