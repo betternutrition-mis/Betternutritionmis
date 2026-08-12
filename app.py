@@ -21,9 +21,11 @@ def init_connection():
     ]
     creds_dict = dict(st.secrets["gcp_service_account"])
     
-    # Private key ke newline (\n) formatting ko fix karne ke liye
+    # Clean private key formatting for multiline / triple-quotes handling
     if "private_key" in creds_dict:
-        creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+        pk = creds_dict["private_key"]
+        pk = pk.replace("\\n", "\n")
+        creds_dict["private_key"] = pk
 
     creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
     client = gspread.authorize(creds)
