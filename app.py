@@ -19,12 +19,14 @@ def init_connection():
         "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/drive"
     ]
+    # Streamlit secrets se directly dictionary lein
     creds_dict = dict(st.secrets["gcp_service_account"])
     
-    # Clean private key formatting for multiline / triple-quotes handling
+    # Private key formatting fix
     if "private_key" in creds_dict:
         pk = creds_dict["private_key"]
-        pk = pk.replace("\\n", "\n")
+        if "\\n" in pk and "\n" not in pk:
+            pk = pk.replace("\\n", "\n")
         creds_dict["private_key"] = pk
 
     creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
