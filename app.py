@@ -1,13 +1,12 @@
 import streamlit as st
 import pandas as pd
-from supabase import create_client, Client
 import datetime
+from supabase import create_client, Client
 
-# Page configuration
-st.set_page_config(page_title="Better Nutrition MIS", layout="wide")
-st.title("Better Nutrition MIS - Complete Dashboard")
+# --- PAGE CONFIGURATION ---
+st.set_page_config(page_title="Better Nutrition ERP", page_icon="🌾", layout="wide", initial_sidebar_state="expanded")
 
-# Supabase Connection
+# --- SUPABASE CONNECTION ---
 @st.cache_resource
 def init_connection():
     url = st.secrets["SUPABASE_URL"]
@@ -16,56 +15,54 @@ def init_connection():
 
 supabase = init_connection()
 
-# Tabs for different sections
-tab1, tab2, tab3, tab4 = st.tabs(["Raw Material", "Milling", "Finished Goods", "Master Records"])
+# --- HELPER FUNCTIONS ---
+def load_data(table_name):
+    response = supabase.table(table_name).select("*").execute()
+    return pd.DataFrame(response.data)
 
-# --- TAB 1: Raw Material ---
-with tab1:
-    st.subheader("Raw Material Entry")
-    with st.form("raw_material_form"):
-        c1, c2 = st.columns(2)
-        with c1:
-            vendor = st.text_input("Vendor Name *")
-            mat = st.text_input("Material Name *")
-        with c2:
-            qty = st.number_input("Gross Qty *", value=0.0)
-            bags = st.number_input("Total Bags *", value=0)
-        
-        if st.form_submit_button("Save RM"):
-            data = {"vendor_name": vendor, "material_name": mat, "gross_qty": qty, "total_bags": bags}
+def get_miller_input(key_prefix, default_val=None):
+    df_emp = load_data("employees")
+    millers_list = df_emp["employee_name"].tolist() if not df_emp.empty else ["Default Miller"]
+    idx = millers_list.index(default_val) if default_val in millers_list else 0
+    return st.selectbox("Miller Name", millers_list, index=idx, key=f"miller_sel_{key_prefix}")
+
+# --- STYLING ---
+st.markdown("""
+    <style>
+    .hero-banner { background: linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%); padding: 25px; border-radius: 12px; color: white; margin-bottom: 25px; }
+    </style>
+""", unsafe_allow_html=True)
+
+# --- LOGIN LOGIC ---
+if "logged_in" not in st.session_state: st.session_state.update({"logged_in": False, "user_name": "", "user_role": ""})
+
+if not st.session_state["logged_in"]:
+    st.markdown('<div class="hero-banner" style="text-align: center;"><h1>🌾 Better Nutrition ERP</h1><p>Please log in</p></div>', unsafe_allow_html=True)
+    with st.form("login_form"):
+        username = st.text_input("Employee Name")
+        pin = st.text_input("PIN", type="password")
+        if st.form_submit_button("Login"):
+            df_emp = load_data("employees")
+            user = df_emp[(df_emp["employee_name"] == username.strip()) & (df_emp["pin"] == pin.strip())]
+            if not user.empty:
+                st.session_state.update({"logged_in": True, "user_name": username, "user_role": user.iloc[0]["role"]})
+                st.rerun()
+            else: st.error("Invalid Credentials!")
+    st.stop()
+
+# --- NAVIGATION ---
+menu = st.sidebar.radio("Navigation Menu", ["1. Raw Material Receiving", "2. Raw Material Quality Lab", "3. Milling Entry", "4. Finished Goods Entry", "5. Dashboards & Stock Ledger"])
+
+# --- CORE LOGIC EXAMPLE (Raw Material Section) ---
+if menu == "1. Raw Material Receiving":
+    st.subheader("Incoming Raw Material Entry")
+    with st.form("rm_form"):
+        miller = get_miller_input("rm")
+        vendor = st.text_input("Vendor Name")
+        qty = st.number_input("Gross Qty")
+        # ... बाकी के fields यहाँ जोड़ें ...
+        if st.form_submit_button("Save"):
+            data = {"vendor_name": vendor, "gross_qty": qty, "miller_name": miller, "entered_by": st.session_state["user_name"]}
             supabase.table("raw_material").insert(data).execute()
             st.success("Saved!")
-
-# --- TAB 2: Milling ---
-with tab2:
-    st.subheader("Milling Entry")
-    with st.form("milling_form"):
-        miller = st.text_input("Miller Name")
-        out_qty = st.number_input("Output Qty")
-        if st.form_submit_button("Save Milling"):
-            data = {"miller_name": miller, "output_qty": out_qty}
-            supabase.table("milling").insert(data).execute()
-            st.success("Milling Saved!")
-
-# --- TAB 3: Finished Goods ---
-with tab3:
-    st.subheader("Finished Goods Entry")
-    with st.form("fg_form"):
-        product = st.text_input("Product Name")
-        fg_qty = st.number_input("FG Qty")
-        if st.form_submit_button("Save FG"):
-            data = {"product_name": product, "fg_qty": fg_qty}
-            supabase.table("finished_goods").insert(data).execute()
-            st.success("FG Saved!")
-
-# --- TAB 4: Master Records (Combined View) ---
-with tab4:
-    st.subheader("Master Sheet - Records")
-    try:
-        # Example: Fetching Raw Material for Master Sheet
-        rm_data = supabase.table("raw_material").select("*").execute()
-        st.write("Raw Material Table:", pd.DataFrame(rm_data.data))
-        
-        # Add similar logic for Milling/FG if needed
-    except Exception as e:
-        st.error(f"Error loading records: {e}")
+    st.dataframe(load_data("raw_material"))
